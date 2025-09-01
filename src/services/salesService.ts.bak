@@ -1,0 +1,1107 @@
+import {
+  collection,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+  addDoc,
+  query,
+  where,
+  getDoc,
+  setDoc,
+  Timestamp,
+  orderBy,
+  limit,
+} from "firebase/firestore";
+import { db } from "../firebase";
+
+export interface Sale {
+  id: string;
+  date: any;
+  offer: string;
+  name: string;
+  orderNumber: string;
+  consent: string;
+  userId?: string; // Optionnel pour compatibilité avec les composants existants
+}
+
+export interface ContactsArgues {
+  id?: string;
+  date: string; // Format YYYY-MM-DD
+  count: number;
+  updatedAt?: Timestamp;
+  updatedBy?: string;
+}
+
+export interface Offer {
+  id: string;
+  name: string;
+}
+
+export const OFFERS: Offer[] = [
+  { id: "canal", name: "CANAL+" },
+  { id: "canal-cine-series", name: "CANAL+ Ciné Séries" },
+  { id: "canal-sport", name: "CANAL+ Sport" },
+  { id: "canal-100", name: "CANAL+ 100%" },
+];
+
+export interface SalesFilters {
+  offers?: string[];
+  sellers?: string[];
+  consent?: string[];
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface SalesStats {
+  dailySales: number;
+  weeklySales: number;
+  monthlySales: number;
+  totalSales: number;
+}
+
+export interface PeriodOptions {
+  year: number;
+  month: number;
+  week: number;
+}
+
+class SalesService {
+  /**
+   * Parse une date depuis Firestore
+   */
+  parseDate(dateValue: any): Date | null {
+    if (!dateValue) return null;
+
+    if (dateValue.toDate && typeof dateValue.toDate === "function") {
+      return dateValue.toDate();
+    }
+
+    if (typeof dateValue === "string") {
+      return new Date(dateValue);
+    }
+
+    if (dateValue instanceof Date) {
+      return dateValue;
+    }
+
+    return null;
+  }
+
+  /**
+   * Vérifie si une date est aujourd'hui
+   */
+  isToday(date: any): boolean {
+    const d = this.parseDate(date);
+    if (!d) return false;
+    const now = new Date();
+    return (
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear()
+    );
+  }
+
+  /**
+   * Vérifie si une date est dans la semaine courante
+   */
+  isThisWeek(date: any): boolean {
+    const d = this.parseDate(date);
+    if (!d) return false;
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    return d >= weekStart;
+  }
+
+  /**
+   * Vérifie si une date est dans le mois courant
+   */
+  isThisMonth(date: any): boolean {
+    const d = this.parseDate(date);
+    if (!d) return false;
+    const now = new Date();
+    return (
+      d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+    );
+  }
+
+  /**
+   * Récupère toutes les ventes
+   */
+  async getAllSales(): Promise<Sale[]> {
+    try {
+      console.log("Chargement des ventes...");
+      const snapshot = await getDocs(collection(db, "sales"));
+      const salesData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Sale[];
+
+      console.log(`${salesData.length} ventes chargées`);
+      return salesData;
+    } catch (error) {
+      console.error("Erreur lors du chargement des ventes:", error);
+      throw new Error("Impossible de charger les ventes");
+    }
+  }
+
+  /**
+   * Récupère les ventes avec filtres
+   */
+  async getSalesWithFilters(filters: SalesFilters): Promise<Sale[]> {
+    try {
+      // Pour l'instant, on récupère toutes les ventes et on filtre côté client
+      // Dans une version future, on pourrait optimiser avec des requêtes Firestore
+      const allSales = await this.getAllSales();
+      return this.filterSales(allSales, filters);
+    } catch (error) {
+      console.error("Erreur lors du filtrage des ventes:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère toutes les ventes avec consentement "yes" (pour le dashboard)
+   */
+  async getSalesWithConsent(): Promise<Sale[]> {
+    try {
+      console.log("Chargement des ventes avec consentement...");
+      const allSales = await this.getAllSales();
+      const salesWithConsent = allSales.filter(
+        (sale) => sale.consent === "yes"
+      );
+
+      console.log(
+        `${salesWithConsent.length} ventes avec consentement chargées sur ${allSales.length} au total`
+      );
+      return salesWithConsent;
+    } catch (error) {
+      console.error(
+        "Erreur lors du chargement des ventes avec consentement:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Filtre les ventes selon les critères donnés
+   */
+  filterSales(sales: Sale[], filters: SalesFilters): Sale[] {
+    let filtered = [...sales];
+
+    // Filtre par offres
+    if (filters.offers && filters.offers.length > 0) {
+      filtered = filtered.filter((sale) =>
+        filters.offers!.includes(sale.offer)
+      );
+    }
+
+    // Filtre par vendeurs
+    if (filters.sellers && filters.sellers.length > 0) {
+      filtered = filtered.filter((sale) =>
+        filters.sellers!.includes(sale.name)
+      );
+    }
+
+    // Filtre par consentement
+    if (filters.consent && filters.consent.length > 0) {
+      filtered = filtered.filter((sale) =>
+        filters.consent!.includes(sale.consent)
+      );
+    }
+
+    // Filtre par dates
+    if (filters.startDate || filters.endDate) {
+      filtered = filtered.filter((sale) => {
+        const saleDate = this.parseDate(sale.date);
+        if (!saleDate) return false;
+
+        const start = filters.startDate ? new Date(filters.startDate) : null;
+        const end = filters.endDate ? new Date(filters.endDate) : null;
+
+        // Ajuster la date de fin pour inclure toute la journée (23:59:59)
+        if (end) {
+          end.setHours(23, 59, 59, 999);
+        }
+
+        if (start && saleDate < start) return false;
+        if (end && saleDate > end) return false;
+
+        return true;
+      });
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Calcule les statistiques des ventes
+   */
+  getSalesStats(sales: Sale[]): SalesStats {
+    return {
+      dailySales: sales.filter((sale) => this.isToday(sale.date)).length,
+      weeklySales: sales.filter((sale) => this.isThisWeek(sale.date)).length,
+      monthlySales: sales.filter((sale) => this.isThisMonth(sale.date)).length,
+      totalSales: sales.length,
+    };
+  }
+
+  /**
+   * Récupère la liste unique des vendeurs
+   */
+  getSellers(sales: Sale[]): string[] {
+    return Array.from(new Set(sales.map((sale) => sale.name))).filter(Boolean);
+  }
+
+  /**
+   * Récupère les ventes récentes (aujourd'hui)
+   */
+  getRecentSales(sales: Sale[], limit: number = 10): Sale[] {
+    return sales
+      .filter((sale) => this.isToday(sale.date))
+      .sort((a, b) => {
+        const dateA = this.parseDate(a.date);
+        const dateB = this.parseDate(b.date);
+        if (!dateA || !dateB) return 0;
+        return dateB.getTime() - dateA.getTime();
+      })
+      .slice(0, limit);
+  }
+
+  /**
+   * Calcule le top des vendeurs
+   */
+  getTopSellers(
+    sales: Sale[],
+    limit: number = 5
+  ): Array<{ name: string; count: number }> {
+    const salesCount = sales.reduce((acc, sale) => {
+      acc[sale.name] = (acc[sale.name] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(salesCount)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
+  }
+
+  /**
+   * Met à jour une vente
+   */
+  async updateSale(saleId: string, updatedData: Partial<Sale>): Promise<void> {
+    try {
+      await updateDoc(doc(db, "sales", saleId), updatedData);
+      console.log(`Vente ${saleId} mise à jour`);
+    } catch (error) {
+      console.error("Erreur lors de la modification:", error);
+      throw new Error("Impossible de modifier la vente");
+    }
+  }
+
+  /**
+   * Supprime une vente
+   */
+  async deleteSale(saleId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, "sales", saleId));
+      console.log(`Vente ${saleId} supprimée`);
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      throw new Error("Impossible de supprimer la vente");
+    }
+  }
+
+  /**
+   * Retourne le nom d'une offre par son ID
+   */
+  getOfferName(offerId: string): string {
+    const offer = OFFERS.find((o) => o.id === offerId);
+    return offer?.name || offerId;
+  }
+
+  /**
+   * Exporte les ventes au format CSV
+   */
+  exportToCSV(sales: Sale[]): string {
+    const headers = ["Date", "Vendeur", "N° Commande", "Offre", "Consentement"];
+    const csvContent = [
+      headers.join(","),
+      ...sales.map((sale) => {
+        const saleDate = this.parseDate(sale.date);
+        const offerName = this.getOfferName(sale.offer);
+        return [
+          saleDate ? saleDate.toLocaleDateString("fr-FR") : "",
+          sale.name,
+          sale.orderNumber,
+          offerName,
+          sale.consent === "yes" ? "Oui" : "En attente",
+        ].join(",");
+      }),
+    ].join("\n");
+
+    return csvContent;
+  }
+
+  /**
+   * Télécharge un fichier CSV
+   */
+  downloadCSV(csvContent: string, filename?: string): void {
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      filename ||
+        `ventes_canal_plus_${new Date().toISOString().split("T")[0]}.csv`
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  /**
+   * Génère une liste de périodes complètes selon le type demandé
+   */
+  getCompletePeriods(
+    sales: Sale[],
+    periodType: "day" | "week" | "month",
+    numberOfPeriods: number = 7
+  ): string[] {
+    if (sales.length === 0) return [];
+
+    const today = new Date();
+    const periods: string[] = [];
+
+    switch (periodType) {
+      case "day":
+        for (let i = numberOfPeriods - 1; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(today.getDate() - i);
+          periods.push(
+            date.toLocaleDateString("fr-FR", {
+              day: "2-digit",
+              month: "2-digit",
+            })
+          );
+        }
+        break;
+
+      case "week":
+        for (let i = numberOfPeriods - 1; i >= 0; i--) {
+          const weekStart = new Date(today);
+          weekStart.setDate(today.getDate() - (today.getDay() + i * 7));
+          weekStart.setHours(0, 0, 0, 0);
+
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+
+          periods.push(
+            `${weekStart.getDate()}/${
+              weekStart.getMonth() + 1
+            } - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`
+          );
+        }
+        break;
+
+      case "month":
+        for (let i = numberOfPeriods - 1; i >= 0; i--) {
+          const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+          periods.push(
+            date.toLocaleDateString("fr-FR", {
+              month: "long",
+              year: "numeric",
+            })
+          );
+        }
+        break;
+    }
+
+    return periods;
+  }
+
+  /**
+   * Compte les ventes pour chaque période complète
+   */
+  getSalesCountByCompletePeriods(
+    sales: Sale[],
+    periodType: "day" | "week" | "month",
+    numberOfPeriods: number = 7
+  ): number[] {
+    const today = new Date();
+    const counts: number[] = [];
+
+    switch (periodType) {
+      case "day":
+        for (let i = numberOfPeriods - 1; i >= 0; i--) {
+          const targetDate = new Date(today);
+          targetDate.setDate(today.getDate() - i);
+
+          const count = sales.filter((sale) => {
+            const saleDate = this.parseDate(sale.date);
+            if (!saleDate) return false;
+
+            return (
+              saleDate.getDate() === targetDate.getDate() &&
+              saleDate.getMonth() === targetDate.getMonth() &&
+              saleDate.getFullYear() === targetDate.getFullYear()
+            );
+          }).length;
+
+          counts.push(count);
+        }
+        break;
+
+      case "week":
+        for (let i = numberOfPeriods - 1; i >= 0; i--) {
+          const weekStart = new Date(today);
+          weekStart.setDate(today.getDate() - (today.getDay() + i * 7));
+          weekStart.setHours(0, 0, 0, 0);
+
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+
+          const count = sales.filter((sale) => {
+            const saleDate = this.parseDate(sale.date);
+            if (!saleDate) return false;
+
+            return saleDate >= weekStart && saleDate <= weekEnd;
+          }).length;
+
+          counts.push(count);
+        }
+        break;
+
+      case "month":
+        for (let i = numberOfPeriods - 1; i >= 0; i--) {
+          // Premier jour du mois
+          const monthStart = new Date(
+            today.getFullYear(),
+            today.getMonth() - i,
+            1
+          );
+          monthStart.setHours(0, 0, 0, 0);
+
+          // Dernier jour du mois
+          const monthEnd = new Date(
+            today.getFullYear(),
+            today.getMonth() - i + 1,
+            0
+          );
+          monthEnd.setHours(23, 59, 59, 999);
+
+          const count = sales.filter((sale) => {
+            const saleDate = this.parseDate(sale.date);
+            if (!saleDate) return false;
+
+            return saleDate >= monthStart && saleDate <= monthEnd;
+          }).length;
+
+          counts.push(count);
+        }
+        break;
+    }
+
+    return counts;
+  }
+
+  /**
+   * Génère une liste de périodes complètes à partir du 01/06/2025
+   * avec exactement le nombre de périodes demandé, en excluant les weekends pour les jours
+   */
+  getCompletePeriodsFromFixedDate(
+    periodType: "day" | "week" | "month",
+    numberOfPeriods: number = 7
+  ): string[] {
+    const fixedStartDate = new Date(2025, 5, 1); // 1er juin 2025
+    const periods: string[] = [];
+
+    switch (periodType) {
+      case "day":
+        // Pour les jours, on exclut les weekends (samedi et dimanche)
+        let daysAdded = 0;
+        let currentDay = 0;
+
+        while (daysAdded < numberOfPeriods) {
+          const date = new Date(fixedStartDate);
+          date.setDate(fixedStartDate.getDate() + currentDay);
+
+          // On n'ajoute pas les weekends (6 = samedi, 0 = dimanche)
+          const dayOfWeek = date.getDay();
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            periods.push(
+              date.toLocaleDateString("fr-FR", {
+                day: "2-digit",
+                month: "2-digit",
+              })
+            );
+            daysAdded++;
+          }
+
+          currentDay++;
+        }
+        break;
+
+      case "week":
+        // On commence par le lundi de la semaine contenant le 10/06/2025
+        const weekStart = new Date(fixedStartDate);
+        const day = weekStart.getDay() || 7; // Convertit 0 (dimanche) en 7
+        weekStart.setDate(weekStart.getDate() - (day - 1)); // Aller au lundi
+
+        for (let i = 0; i < numberOfPeriods; i++) {
+          const currentWeekStart = new Date(weekStart);
+          currentWeekStart.setDate(weekStart.getDate() + i * 7);
+
+          const weekEnd = new Date(currentWeekStart);
+          weekEnd.setDate(currentWeekStart.getDate() + 6);
+
+          periods.push(
+            `${currentWeekStart.getDate()}/${
+              currentWeekStart.getMonth() + 1
+            } - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`
+          );
+        }
+        break;
+
+      case "month":
+        for (let i = 0; i < numberOfPeriods; i++) {
+          const date = new Date(
+            fixedStartDate.getFullYear(),
+            fixedStartDate.getMonth() + i,
+            1
+          );
+          periods.push(
+            date.toLocaleDateString("fr-FR", {
+              month: "long",
+              year: "numeric",
+            })
+          );
+        }
+        break;
+    }
+
+    return periods;
+  }
+
+  /**
+   * Compte les ventes pour chaque période complète à partir d'une date fixe (01/06/2025)
+   * Les périodes futures auront null au lieu de 0 pour ne pas les afficher sur le graphique
+   * Pour les jours, on exclut les weekends
+   */
+  getSalesCountByCompletePeriodsFromFixedDate(
+    sales: Sale[],
+    periodType: "day" | "week" | "month",
+    numberOfPeriods: number = 7
+  ): (number | null)[] {
+    const fixedStartDate = new Date(2025, 5, 1); // 1er juin 2025
+    const today = new Date(); // aujourd'hui (02/07/2025)
+    const counts: (number | null)[] = [];
+
+    switch (periodType) {
+      case "day":
+        // Pour les jours, on exclut les weekends (samedi et dimanche)
+        let daysAdded = 0;
+        let currentDay = 0;
+
+        while (daysAdded < numberOfPeriods) {
+          const targetDate = new Date(fixedStartDate);
+          targetDate.setDate(fixedStartDate.getDate() + currentDay);
+
+          // On traite uniquement les jours de semaine (lundi à vendredi)
+          const dayOfWeek = targetDate.getDay();
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            // Si la date est dans le futur, ajouter null (pas de données)
+            if (targetDate > today) {
+              counts.push(null);
+            } else {
+              const count = sales.filter((sale) => {
+                const saleDate = this.parseDate(sale.date);
+                if (!saleDate) return false;
+
+                return (
+                  saleDate.getDate() === targetDate.getDate() &&
+                  saleDate.getMonth() === targetDate.getMonth() &&
+                  saleDate.getFullYear() === targetDate.getFullYear()
+                );
+              }).length;
+
+              counts.push(count);
+            }
+
+            daysAdded++; // On incrémente seulement pour les jours de semaine
+          }
+
+          currentDay++;
+        }
+        break;
+
+      case "week":
+        // On commence par le lundi de la semaine contenant le 10/06/2025
+        const weekStart = new Date(fixedStartDate);
+        const day = weekStart.getDay() || 7; // Convertit 0 (dimanche) en 7
+        weekStart.setDate(weekStart.getDate() - (day - 1)); // Aller au lundi
+
+        // Trouver le lundi de la semaine courante
+        const currentWeekStart = new Date(today);
+        const todayDayOfWeek = currentWeekStart.getDay() || 7;
+        currentWeekStart.setDate(today.getDate() - (todayDayOfWeek - 1));
+        currentWeekStart.setHours(0, 0, 0, 0);
+
+        for (let i = 0; i < numberOfPeriods; i++) {
+          const thisWeekStart = new Date(weekStart);
+          thisWeekStart.setDate(weekStart.getDate() + i * 7);
+          thisWeekStart.setHours(0, 0, 0, 0);
+
+          // Si c'est une semaine future, ajouter null (pas de données)
+          if (thisWeekStart > currentWeekStart) {
+            counts.push(null);
+            continue;
+          }
+
+          const weekEnd = new Date(thisWeekStart);
+          weekEnd.setDate(thisWeekStart.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+
+          const count = sales.filter((sale) => {
+            const saleDate = this.parseDate(sale.date);
+            if (!saleDate) return false;
+
+            return saleDate >= thisWeekStart && saleDate <= weekEnd;
+          }).length;
+
+          counts.push(count);
+        }
+        break;
+
+      case "month":
+        // Trouver le mois actuel
+        const currentMonthStart = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          1
+        );
+
+        for (let i = 0; i < numberOfPeriods; i++) {
+          const monthStart = new Date(
+            fixedStartDate.getFullYear(),
+            fixedStartDate.getMonth() + i,
+            1
+          );
+          monthStart.setHours(0, 0, 0, 0);
+
+          // Si c'est un mois futur, ajouter null (pas de données)
+          if (monthStart > currentMonthStart) {
+            counts.push(null);
+            continue;
+          }
+
+          // Dernier jour du mois
+          const monthEnd = new Date(
+            fixedStartDate.getFullYear(),
+            fixedStartDate.getMonth() + i + 1,
+            0
+          );
+          monthEnd.setHours(23, 59, 59, 999);
+
+          // Si nous sommes dans le mois courant, ajuster la date de fin à aujourd'hui
+          if (
+            monthStart.getMonth() === today.getMonth() &&
+            monthStart.getFullYear() === today.getFullYear()
+          ) {
+            monthEnd.setTime(Math.min(monthEnd.getTime(), today.getTime()));
+          }
+
+          const count = sales.filter((sale) => {
+            const saleDate = this.parseDate(sale.date);
+            if (!saleDate) return false;
+
+            return saleDate >= monthStart && saleDate <= monthEnd;
+          }).length;
+
+          counts.push(count);
+        }
+        break;
+    }
+
+    return counts;
+  }
+
+  /**
+   * Interface pour les options de période
+   */
+  interface PeriodOptions {
+    year: number;
+    month: number;
+    week: number;
+  }
+
+  /**
+   * Génère des périodes personnalisées en fonction des options fournies
+   */
+  getCustomPeriods(
+    periodType: "day" | "week" | "month",
+    numberOfPeriods: number = 7,
+    options: PeriodOptions
+  ): string[] {
+    const periods: string[] = [];
+    const { year, month, week } = options;
+
+    switch (periodType) {
+      case "day":
+        // Générer des jours pour le mois sélectionné
+        const firstDayOfMonth = new Date(year, month - 1, 1);
+        const lastDayOfMonth = new Date(year, month, 0);
+        const daysInMonth = lastDayOfMonth.getDate();
+
+        // Si c'est le mois en cours, ne pas dépasser aujourd'hui
+        const today = new Date();
+        const isCurrentMonth =
+          today.getFullYear() === year &&
+          today.getMonth() === month - 1;
+
+        const maxDay = isCurrentMonth ? today.getDate() : daysInMonth;
+
+        // Ajouter tous les jours ouvrables du mois (pas de weekend)
+        for (let day = 1; day <= maxDay; day++) {
+          const date = new Date(year, month - 1, day);
+          const dayOfWeek = date.getDay();
+
+          // Exclure les weekends (0 = dimanche, 6 = samedi)
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            periods.push(
+              date.toLocaleDateString("fr-FR", {
+                day: "2-digit",
+                month: "2-digit",
+              })
+            );
+          }
+        }
+        break;
+
+      case "week":
+        // Calculer la date du premier jour de l'année
+        const firstDayOfYear = new Date(year, 0, 1);
+
+        // Trouver le premier lundi de l'année
+        const dayOfWeek = firstDayOfYear.getDay() || 7; // convertir 0 (dimanche) en 7
+        const daysToAdd = dayOfWeek === 1 ? 0 : 8 - dayOfWeek;
+        const firstMondayOfYear = new Date(year, 0, 1 + daysToAdd);
+
+        // Calculer le début de la semaine sélectionnée
+        const selectedWeekStart = new Date(firstMondayOfYear);
+        selectedWeekStart.setDate(firstMondayOfYear.getDate() + (week - 1) * 7);
+
+        // Générer les périodes pour les 4 semaines à partir de la semaine sélectionnée
+        for (let i = 0; i < numberOfPeriods; i++) {
+          const weekStart = new Date(selectedWeekStart);
+          weekStart.setDate(selectedWeekStart.getDate() + i * 7);
+
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+
+          // Si cette semaine est dans le futur, arrêter
+          const today = new Date();
+          if (weekStart > today) break;
+
+          periods.push(
+            `${weekStart.getDate()}/${weekStart.getMonth() + 1} - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`
+          );
+        }
+        break;
+
+      case "month":
+        // Générer les mois à partir du mois sélectionné
+        for (let i = 0; i < numberOfPeriods; i++) {
+          const date = new Date(year, month - 1 + i, 1);
+
+          // Si ce mois est dans le futur, arrêter
+          const today = new Date();
+          if (date > today) break;
+
+          periods.push(
+            date.toLocaleDateString("fr-FR", {
+              month: "long",
+              year: "numeric",
+            })
+          );
+        }
+        break;
+    }
+
+    return periods;
+  }
+
+  /**
+   * Compte les ventes pour chaque période personnalisée
+   */
+  getCustomSalesCountByPeriods(
+    sales: Sale[],
+    periodType: "day" | "week" | "month",
+    numberOfPeriods: number = 7,
+    options: PeriodOptions
+  ): (number | null)[] {
+    const { year, month, week } = options;
+    const counts: (number | null)[] = [];
+    const today = new Date();
+
+    switch (periodType) {
+      case "day":
+        // Générer des jours pour le mois sélectionné
+        const firstDayOfMonth = new Date(year, month - 1, 1);
+        const lastDayOfMonth = new Date(year, month, 0);
+        const daysInMonth = lastDayOfMonth.getDate();
+
+        // Si c'est le mois en cours, ne pas dépasser aujourd'hui
+        const isCurrentMonth =
+          today.getFullYear() === year &&
+          today.getMonth() === month - 1;
+
+        const maxDay = isCurrentMonth ? today.getDate() : daysInMonth;
+
+        // Ajouter tous les jours ouvrables du mois (pas de weekend)
+        for (let day = 1; day <= maxDay; day++) {
+          const date = new Date(year, month - 1, day);
+          const dayOfWeek = date.getDay();
+
+          // Exclure les weekends (0 = dimanche, 6 = samedi)
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            // Compter les ventes pour ce jour
+            const count = sales.filter((sale) => {
+              const saleDate = this.parseDate(sale.date);
+              if (!saleDate) return false;
+
+              return (
+                saleDate.getDate() === date.getDate() &&
+                saleDate.getMonth() === date.getMonth() &&
+                saleDate.getFullYear() === date.getFullYear()
+              );
+            }).length;
+
+            counts.push(count);
+          }
+        }
+        break;
+
+      case "week":
+        // Calculer la date du premier jour de l'année
+        const firstDayOfYear = new Date(year, 0, 1);
+
+        // Trouver le premier lundi de l'année
+        const dayOfWeek = firstDayOfYear.getDay() || 7; // convertir 0 (dimanche) en 7
+        const daysToAdd = dayOfWeek === 1 ? 0 : 8 - dayOfWeek;
+        const firstMondayOfYear = new Date(year, 0, 1 + daysToAdd);
+
+        // Calculer le début de la semaine sélectionnée
+        const selectedWeekStart = new Date(firstMondayOfYear);
+        selectedWeekStart.setDate(firstMondayOfYear.getDate() + (week - 1) * 7);
+
+        // Générer les périodes pour les 4 semaines à partir de la semaine sélectionnée
+        for (let i = 0; i < numberOfPeriods; i++) {
+          const weekStart = new Date(selectedWeekStart);
+          weekStart.setDate(selectedWeekStart.getDate() + i * 7);
+          weekStart.setHours(0, 0, 0, 0);
+
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+
+          // Si cette semaine est dans le futur, ajouter null
+          if (weekStart > today) {
+            counts.push(null);
+          } else {
+            // Compter les ventes pour cette semaine
+            const count = sales.filter((sale) => {
+              const saleDate = this.parseDate(sale.date);
+              if (!saleDate) return false;
+
+              return saleDate >= weekStart && saleDate <= weekEnd;
+            }).length;
+
+            counts.push(count);
+          }
+        }
+        break;
+
+      case "month":
+        // Générer les mois à partir du mois sélectionné
+        for (let i = 0; i < numberOfPeriods; i++) {
+          const monthStart = new Date(year, month - 1 + i, 1);
+          monthStart.setHours(0, 0, 0, 0);
+
+          const monthEnd = new Date(year, month + i, 0);
+          monthEnd.setHours(23, 59, 59, 999);
+
+          // Si ce mois est dans le futur, ajouter null
+          if (monthStart > today) {
+            counts.push(null);
+          } else {
+            // Compter les ventes pour ce mois
+            const count = sales.filter((sale) => {
+              const saleDate = this.parseDate(sale.date);
+              if (!saleDate) return false;
+
+              return saleDate >= monthStart && saleDate <= monthEnd;
+            }).length;
+
+            counts.push(count);
+          }
+        }
+        break;
+    }
+
+    return counts;
+  }
+
+  /**
+   * Récupère les contacts argumentés pour une date spécifique
+   * @param dateStr Date au format YYYY-MM-DD
+   * @returns Le nombre de contacts argumentés pour cette date
+   */
+  async getContactsArguesForDate(dateStr: string): Promise<number> {
+    try {
+      const contactsArguesRef = collection(db, "contactsArgues");
+      const q = query(contactsArguesRef, where("date", "==", dateStr));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) return 0;
+
+      return snapshot.docs[0].data().count || 0;
+    } catch (error) {
+      console.error(
+        "Erreur lors de la récupération des contacts argumentés:",
+        error
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Récupère les contacts argumentés pour une période
+   * @param startDate Date de début au format YYYY-MM-DD
+   * @param endDate Date de fin au format YYYY-MM-DD
+   * @returns Tableau des contacts argumentés pour la période
+   */
+  async getContactsArguesForPeriod(
+    startDate?: string,
+    endDate?: string
+  ): Promise<ContactsArgues[]> {
+    try {
+      const contactsArguesRef = collection(db, "contactsArgues");
+      let q = query(contactsArguesRef, orderBy("date", "desc"));
+
+      if (startDate) {
+        q = query(q, where("date", ">=", startDate));
+      }
+
+      if (endDate) {
+        q = query(q, where("date", "<=", endDate));
+      }
+
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as ContactsArgues[];
+    } catch (error) {
+      console.error(
+        "Erreur lors de la récupération des contacts argumentés:",
+        error
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Récupère les 30 derniers contacts argumentés
+   * @returns Tableau des 30 derniers contacts argumentés
+   */
+  async getRecentContactsArgues(): Promise<ContactsArgues[]> {
+    try {
+      const contactsArguesRef = collection(db, "contactsArgues");
+      const q = query(contactsArguesRef, orderBy("date", "desc"), limit(30));
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as ContactsArgues[];
+    } catch (error) {
+      console.error(
+        "Erreur lors de la récupération des contacts argumentés récents:",
+        error
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Enregistre ou met à jour les contacts argumentés pour une date donnée
+   * @param date Date au format YYYY-MM-DD
+   * @param count Nombre de contacts argumentés
+   * @param userId ID de l'utilisateur qui effectue la modification
+   * @returns ID du document mis à jour ou créé
+   */
+  async saveContactsArgues(
+    date: string,
+    count: number,
+    userId?: string
+  ): Promise<string> {
+    try {
+      const contactsArguesRef = collection(db, "contactsArgues");
+      const q = query(contactsArguesRef, where("date", "==", date));
+      const snapshot = await getDocs(q);
+
+      const data: ContactsArgues = {
+        date,
+        count,
+        updatedAt: Timestamp.now(),
+        updatedBy: userId,
+      };
+
+      let docId;
+
+      if (snapshot.empty) {
+        // Créer un nouveau document
+        const docRef = await addDoc(contactsArguesRef, data);
+        docId = docRef.id;
+      } else {
+        // Mettre à jour le document existant
+        const docRef = doc(db, "contactsArgues", snapshot.docs[0].id);
+        await updateDoc(docRef, {
+          count: count,
+          updatedAt: Timestamp.now(),
+          updatedBy: userId || null,
+        });
+        docId = snapshot.docs[0].id;
+      }
+
+      return docId;
+    } catch (error) {
+      console.error(
+        "Erreur lors de l'enregistrement des contacts argumentés:",
+        error
+      );
+      throw new Error("Impossible d'enregistrer les contacts argumentés");
+    }
+  }
+
+  /**
+   * Calcule le total des contacts argumentés pour une période donnée
+   * @param contacts Liste des contacts argumentés
+   * @returns Le nombre total de contacts argumentés
+   */
+  calculateTotalContactsArgues(contacts: ContactsArgues[]): number {
+    return contacts.reduce((total, contact) => total + contact.count, 0);
+  }
+}
+
+// Export d'une instance singleton
+export const salesService = new SalesService();
+export default salesService;
