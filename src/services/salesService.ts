@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   getDocs,
   updateDoc,
   deleteDoc,
@@ -153,11 +154,26 @@ class SalesService {
    */
   async getAllSales(): Promise<Sale[]> {
     try {
-      const snapshot = await getDocs(collection(db, "sales"));
-      const salesData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Sale[];
+      // Utilise une collectionGroup pour récupérer toutes les sous-collections nommées "sales"
+      // (par ex. missions/{missionId}/sales) ainsi que la collection racine "sales" si elle existe.
+      const snapshot = await getDocs(collectionGroup(db, "sales"));
+      const salesData = snapshot.docs.map((d) => {
+        const data = d.data();
+        // Normalisation minimale : s'assurer que les champs attendus existent
+        return {
+          id: d.id,
+          date: data.date || null,
+          offer: data.offer || data.offerId || "",
+          name: data.name || data.seller || data.vendeur || "",
+          orderNumber: data.orderNumber || data.order || data.panier || "",
+          consent: data.consent || "pending",
+          userId: data.userId || data.updatedBy || null,
+          clientFirstName: data.clientFirstName || data.client_first_name || "",
+          clientLastName: data.clientLastName || data.client_last_name || "",
+          clientPhone: data.clientPhone || data.client_phone || "",
+          ...data,
+        } as Sale;
+      }) as Sale[];
 
       return salesData;
     } catch (error) {
