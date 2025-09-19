@@ -20,6 +20,8 @@ interface ModuleConfig {
 
 const AdminDashboard: React.FC = () => {
   const [sales, setSales] = useState<Sale[]>([]);
+  // Ajout: ventes validées + validées soft pour l'affichage Ventes & Objectifs
+  const [combinedValidatedSales, setCombinedValidatedSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [modules, setModules] = useState<ModuleConfig[]>([
@@ -58,9 +60,13 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     setError("");
-    salesService.getSalesWithStatus("valide")
-      .then((sales) => {
-        setSales(sales);
+    Promise.all([
+      salesService.getSalesWithStatus("valide"),
+      salesService.getSalesWithFilters({ orderStatus: ["valide", "validation_soft"] }),
+    ])
+      .then(([validSales, combined]) => {
+        setSales(validSales);
+        setCombinedValidatedSales(combined);
         setLoading(false);
       })
       .catch(() => {
@@ -79,7 +85,8 @@ const AdminDashboard: React.FC = () => {
   }
 
   // Calcul des statistiques via le service (pour compatibilité avec les anciens composants)
-  const salesStats = salesService.getSalesStats(sales);
+  // Utilise les ventes validées + validées soft pour les compteurs Ventes & Objectifs
+  const salesStats = salesService.getSalesStats(combinedValidatedSales.length ? combinedValidatedSales : sales);
   const sellers = salesService.getSellers(sales);
 
   // Filtrer les sales qui ont un userId pour les modules

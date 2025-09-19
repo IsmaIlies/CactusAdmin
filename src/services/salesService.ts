@@ -935,15 +935,15 @@ class SalesService {
       let countWithStatus = 0;
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
+        // Normaliser le statut afin de couvrir les variantes et inclure validation_soft
+        const normalized = this.normalizeOrderStatus((data as any).orderStatus);
+        const isCountable = normalized === "valide" || normalized === "validation_soft";
         // Filtrage JS par userId si présent
-        if (
-          data.orderStatus === "valide" &&
-          (!periodData.userId || data.userId === periodData.userId)
-        ) {
+        if (isCountable && (!periodData.userId || data.userId === periodData.userId)) {
           countWithStatus++;
         }
       });
-  return countWithStatus;
+      return countWithStatus;
     } catch (error) {
       console.error("Erreur lors du comptage des ventes pour la période:", error);
       return 0;
