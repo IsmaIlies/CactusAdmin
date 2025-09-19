@@ -10,9 +10,8 @@ import {
   Image,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-
-const Sidebar = () => {
-  const { user, logout, isAdmin, isDirection, isSuperviseur } = useAuth();
+const Sidebar: React.FC = () => {
+  const { user, isAdmin, isDirection, isSuperviseur, logout } = useAuth();
   const [isCanalDropdownOpen, setIsCanalDropdownOpen] = useState(false);
   const [activeMission, setActiveMission] = useState("CANAL+");
 
@@ -102,7 +101,7 @@ const Sidebar = () => {
 
       <nav className="flex-1 min-h-0 overflow-y-auto py-6 space-y-1">
         <NavLink
-          to="/dashboard/it-request"
+          to="/dashboard/nouveautes"
           className={({ isActive }) =>
             `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
               isActive
@@ -111,22 +110,37 @@ const Sidebar = () => {
             }`
           }
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-5 h-5 mr-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Demande IT
+          <Image className="w-5 h-5 mr-3" />
+          Nouveautés
         </NavLink>
+        {(isAdmin() || isDirection()) && (
+          <NavLink
+            to="/dashboard/it-request"
+            className={({ isActive }) =>
+              `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-cactus-700/70 text-white"
+                  : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+              }`
+            }
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 mr-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Demande IT
+          </NavLink>
+        )}
 
         {/* Lien externe vers Craiyon (visible uniquement pour les administrateurs) */}
         {isAdmin() && (
@@ -144,17 +158,18 @@ const Sidebar = () => {
           </a>
         )}
 
-        {shouldShowAdminSection() && (
+        {/* Section Application visible pour admin/direction/superviseur */}
+        {shouldShowMainNavigation() && (
           <React.Fragment>
             <div className="px-6 py-2">
               <h3 className="text-xs font-semibold text-cactus-300 uppercase tracking-wider">
-                Administration
+                Application
               </h3>
             </div>
 
-
             <NavLink
-              to="/dashboard/admin-users"
+              to={activeMission === "Leads" ? "/dashboard/leads" : "/dashboard/canal"}
+              end
               className={({ isActive }) =>
                 `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
                   isActive
@@ -163,12 +178,12 @@ const Sidebar = () => {
                 }`
               }
             >
-              <span className="mr-3" role="img" aria-label="utilisateur">👤</span>
-              Gestion Utilisateurs
+              <LayoutDashboard className="w-5 h-5 mr-3" />
+              Dashboard
             </NavLink>
 
             <NavLink
-              to="/dashboard/gestion-missions"
+              to="/dashboard/presence-ta"
               className={({ isActive }) =>
                 `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
                   isActive
@@ -177,33 +192,13 @@ const Sidebar = () => {
                 }`
               }
             >
-              <span className="mr-3" role="img" aria-label="mission">🗂️</span>
-              Gestion Missions
+              <span className="mr-3" role="img" aria-label="presence">🗓️</span>
+              Présence TA
             </NavLink>
 
-            {shouldShowMainNavigation() && (
+            {/* Liens avancés réservés admin/direction */}
+            {(isAdmin() || isDirection()) && (
               <React.Fragment>
-                <div className="px-6 py-2">
-                  <h3 className="text-xs font-semibold text-cactus-300 uppercase tracking-wider">
-                    Application
-                  </h3>
-                </div>
-
-                <NavLink
-                  to={activeMission === "Leads" ? "/dashboard/leads" : "/dashboard/canal"}
-                  end
-                  className={({ isActive }) =>
-                    `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
-                      isActive
-                        ? "bg-cactus-700/70 text-white"
-                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                    }`
-                  }
-                >
-                  <LayoutDashboard className="w-5 h-5 mr-3" />
-                  Dashboard
-                </NavLink>
-
                 {activeMission === "Leads" && (
                   <NavLink
                     to="/dashboard/leads-sales"
@@ -249,21 +244,60 @@ const Sidebar = () => {
                   <Briefcase className="w-5 h-5 mr-3" />
                   Management
                 </NavLink>
-                  <NavLink
-                    to="/dashboard/import-csv"
-                    className={({ isActive }) =>
-                      `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
-                        isActive
-                          ? "bg-cactus-700/70 text-white"
-                          : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                      }`
-                    }
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                    Import CSV
-                  </NavLink>
+                <NavLink
+                  to="/dashboard/import-csv"
+                  className={({ isActive }) =>
+                    `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-cactus-700/70 text-white"
+                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  Import CSV
+                </NavLink>
               </React.Fragment>
             )}
+          </React.Fragment>
+        )}
+
+        {/* Section Administration réservée admin */}
+        {shouldShowAdminSection() && (
+          <React.Fragment>
+            <div className="px-6 py-2">
+              <h3 className="text-xs font-semibold text-cactus-300 uppercase tracking-wider">
+                Administration
+              </h3>
+            </div>
+
+            <NavLink
+              to="/dashboard/admin-users"
+              className={({ isActive }) =>
+                `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-cactus-700/70 text-white"
+                    : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                }`
+              }
+            >
+              <span className="mr-3" role="img" aria-label="utilisateur">👤</span>
+              Gestion Utilisateurs
+            </NavLink>
+
+            <NavLink
+              to="/dashboard/gestion-missions"
+              className={({ isActive }) =>
+                `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-cactus-700/70 text-white"
+                    : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                }`
+              }
+            >
+              <span className="mr-3" role="img" aria-label="mission">🗂️</span>
+              Gestion Missions
+            </NavLink>
           </React.Fragment>
         )}
       </nav>

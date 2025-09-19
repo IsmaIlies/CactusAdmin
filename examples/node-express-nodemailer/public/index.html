@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test envoi email</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 2rem; }
+      label { display:block; margin-top: 1rem; }
+      input, textarea { width: 100%; padding: .5rem; }
+      button { margin-top: 1rem; padding: .6rem 1rem; background: #0c7; color:#fff; border: 0; border-radius: 6px; cursor: pointer; }
+      pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+  <h1>Exemple bouton d'envoi d'email</h1>
+  <p>Les destinataires (TO) sont FIXES côté serveur.</p>
+
+    <label>Sujet <input id="subject" value="Test depuis le bouton" /></label>
+    <label>Message <textarea id="message">Bonjour, ceci est un test.</textarea></label>
+    <label>CC (optionnel, séparés par virgule) <input id="cc" placeholder="ex: a@ex.com,b@ex.com" /></label>
+    <label>BCC (optionnel, séparés par virgule) <input id="bcc" placeholder="ex: c@ex.com,d@ex.com" /></label>
+    <label>Reply-To (optionnel) <input id="replyTo" placeholder="ton.email@ex.com" /></label>
+
+    <button id="sendBtn">Envoyer l'email</button>
+
+    <hr style="margin:2rem 0"/>
+    <h2>Feuille de présence (simple)</h2>
+    <p>Entrer un nom par ligne (présents/absents). Le bouton envoie le récap simple avec le nombre de ventes.</p>
+    <label>Présents (un par ligne)
+      <textarea id="present" rows="6">Alice
+Bob</textarea>
+    </label>
+    <label>Absents (un par ligne)
+      <textarea id="absent" rows="6">Charlie</textarea>
+    </label>
+    <label>Ventes (nombre)
+      <input id="salesCount" type="number" value="3" />
+    </label>
+    <label>Message (optionnel)
+      <textarea id="note" rows="4">Rien à signaler.</textarea>
+    </label>
+    <button id="sendRecapBtn">Envoyer le récap présence</button>
+
+    <h3>Réponse API</h3>
+    <pre id="out"></pre>
+
+    <script>
+      const apiBase = 'http://localhost:3001';
+      const out = document.getElementById('out');
+  document.getElementById('sendBtn').addEventListener('click', async () => {
+        const subject = document.getElementById('subject').value;
+        const message = document.getElementById('message').value;
+        const cc = document.getElementById('cc').value.split(',').map(s => s.trim()).filter(Boolean);
+        const bcc = document.getElementById('bcc').value.split(',').map(s => s.trim()).filter(Boolean);
+        const replyTo = document.getElementById('replyTo').value.trim();
+
+        try {
+          const resp = await fetch(apiBase + '/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject, message, cc, bcc, replyTo })
+          });
+          const data = await resp.json();
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          out.textContent = 'Erreur: ' + e.message;
+        }
+      });
+      document.getElementById('sendRecapBtn').addEventListener('click', async () => {
+        const present = document.getElementById('present').value;
+        const absent = document.getElementById('absent').value;
+        const salesCount = parseInt(document.getElementById('salesCount').value || '0', 10);
+        const message = document.getElementById('note').value;
+        try {
+          const resp = await fetch(apiBase + '/api/send-attendance-recap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ present, absent, salesCount, message })
+          });
+          const data = await resp.json();
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          out.textContent = 'Erreur: ' + e.message;
+        }
+      });
+    </script>
+  </body>
+  </html>

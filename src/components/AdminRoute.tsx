@@ -37,8 +37,9 @@ const AdminRoute: React.FC<AdminRouteProps> = ({
     return <Navigate to="/login" replace />;
   }
 
-  // Bloquer les TAs - les rediriger vers la page d'accès refusé
-  if (isTA()) {
+  // Bloquer uniquement les TAs "purs" (sans rôle supérieur)
+  const isPureTA = isTA() && !isAdmin() && !isDirection() && !isSuperviseur();
+  if (isPureTA) {
     return <Navigate to="/access-denied" replace />;
   }
 

@@ -1,6 +1,5 @@
 import {
   collection,
-  collectionGroup,
   getDocs,
   updateDoc,
   deleteDoc,
@@ -11,9 +10,17 @@ import {
   Timestamp,
   orderBy,
   limit,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { getWeekDates } from "../utils/dateUtils";
+
+export type OrderStatus =
+  | "en_attente"
+  | "valide"
+  | "probleme_iban"
+  | "roac"
+  | "validation_soft"; // anciennement "validation_finale"
 
 export interface Sale {
   id: string;
@@ -21,7 +28,7 @@ export interface Sale {
   offer: string;
   name: string;
   orderNumber: string;
-  consent: string;
+  orderStatus: OrderStatus;
   userId?: string; // Optionnel pour compatibilité avec les composants existants
   // Nouvelles données client (optionnelles)
   clientFirstName?: string;
@@ -52,7 +59,7 @@ export const OFFERS: Offer[] = [
 export interface SalesFilters {
   offers?: string[];
   sellers?: string[];
-  consent?: string[];
+  orderStatus?: OrderStatus[];
   startDate?: string;
   endDate?: string;
 }
@@ -68,6 +75,69 @@ export interface SalesStats {
 
 class SalesService {
   private salesCollection = collection(db, "sales");
+
+  /**
+   * Normalise un statut de commande vers une valeur attendue par l'appli
+   */
+  normalizeOrderStatus(value: any): OrderStatus {
+    if (value === true) return "valide";
+    if (typeof value === "number") return value > 0 ? "valide" : "en_attente";
+    const raw = (value ?? "").toString().toLowerCase();
+    const normalized = raw
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, "_");
+
+    const isValid = [
+      "valide",
+      "validee",
+      "valid",
+      "validated",
+      "approve",
+      "approved",
+      "ok",
+      "done",
+      "oui",
+      "yes",
+      "true",
+      "1",
+      "completed",
+      "complete",
+    ].includes(normalized);
+    if (isValid) return "valide";
+
+    if (
+      normalized.includes("iban") ||
+      normalized === "probleme_iban" ||
+      normalized === "problemeiban"
+    )
+      return "probleme_iban";
+  // Ancien statut "validation_finale" renommé en "validation_soft" (aussi pour "valid soft")
+  if (normalized.includes("final") || normalized.includes("soft")) return "validation_soft";
+    if (normalized.includes("roac")) return "roac";
+
+    const isPending = [
+      "en_attente",
+      "attente",
+      "enattente",
+      "pending",
+      "en_cours",
+      "processing",
+      "wait",
+      "waiting",
+      "non",
+      "false",
+      "0",
+      "todo",
+    ].includes(normalized);
+    if (isPending) return "en_attente";
+
+    if (normalized.includes("valid")) return "valide";
+    if (normalized.includes("attent") || normalized.includes("pend"))
+      return "en_attente";
+
+    return "en_attente";
+  }
 
   /**
    * Parse une date depuis Firestore
@@ -154,19 +224,69 @@ class SalesService {
    */
   async getAllSales(): Promise<Sale[]> {
     try {
-      // Utilise une collectionGroup pour récupérer toutes les sous-collections nommées "sales"
-      // (par ex. missions/{missionId}/sales) ainsi que la collection racine "sales" si elle existe.
-      const snapshot = await getDocs(collectionGroup(db, "sales"));
+      // Version d'origine : lecture simple de la collection "sales"
+      const snapshot = await getDocs(collection(db, "sales"));
       const salesData = snapshot.docs.map((d) => {
-        const data = d.data();
-        // Normalisation minimale : s'assurer que les champs attendus existent
+        const data = d.data() as any;
+        // Mapping direct du basketStatus si présent (même logique que page AdminSalesPage)
+        const basket =
+          data?.basketStatus ??
+          data?.basket_status ??
+          data?.statut_panier ??
+          data?.panierStatut;
+
+        const mapBasketStatus = (basketVal: any): OrderStatus | undefined => {
+          if (basketVal == null || basketVal === "") return undefined;
+          const raw = basketVal.toString().toUpperCase().trim();
+          switch (raw) {
+            case "OK":
+              return "valide";
+            case "VALID FINALE":
+            case "VALIDATION FINALE":
+            case "VALID SOFT":
+            case "VALIDATION SOFT":
+              return "validation_soft";
+            case "ATT":
+            case "EN ATTENTE":
+            case "ATTENTE":
+              return "en_attente";
+            case "PROBLÈME IBAN":
+            case "PROBLEME IBAN":
+            case "PROBLEME_IBAN":
+              return "probleme_iban";
+            case "ROAC":
+              return "roac";
+            default:
+              return undefined;
+          }
+        };
+
+        const candidateStatus =
+          mapBasketStatus(basket) ??
+          data?.orderStatus ??
+          data?.status ??
+          data?.order_status ??
+          data?.statut ??
+          data?.statut_commande ??
+          data?.status_commande ??
+          (data?.consent === "yes" || data?.consentement === "yes"
+            ? "valide"
+            : undefined);
+
+        // Normalisation du nom vendeur pour unifier variantes (ex: Guy Laroche KOUADIO → Guy la roche)
+        const rawName = data.name || data.seller || data.vendeur || "";
+        let unifiedName = rawName;
+        const lowerName = rawName.toLowerCase();
+        if (lowerName.includes("guy") && lowerName.includes("laroche")) {
+          unifiedName = "Guy la roche";
+        }
         return {
           id: d.id,
           date: data.date || null,
           offer: data.offer || data.offerId || "",
-          name: data.name || data.seller || data.vendeur || "",
+          name: unifiedName,
           orderNumber: data.orderNumber || data.order || data.panier || "",
-          consent: data.consent || "pending",
+          orderStatus: this.normalizeOrderStatus(candidateStatus),
           userId: data.userId || data.updatedBy || null,
           clientFirstName: data.clientFirstName || data.client_first_name || "",
           clientLastName: data.clientLastName || data.client_last_name || "",
@@ -174,7 +294,6 @@ class SalesService {
           ...data,
         } as Sale;
       }) as Sale[];
-
       return salesData;
     } catch (error) {
       console.error("Erreur lors du chargement des ventes:", error);
@@ -197,26 +316,7 @@ class SalesService {
     }
   }
 
-  /**
-   * Récupère toutes les ventes avec consentement "yes" (pour le dashboard)
-   */
-  async getSalesWithConsent(): Promise<Sale[]> {
-    try {
-      const allSales = await this.getAllSales();
-      const salesWithConsent = allSales.filter(
-        (sale) => sale.consent === "yes"
-      );
 
-        // `${salesWithConsent.length} ventes avec consentement chargées sur ${allSales.length} au total`
-      return salesWithConsent;
-    } catch (error) {
-      console.error(
-        "Erreur lors du chargement des ventes avec consentement:",
-        error
-      );
-      throw error;
-    }
-  }
 
   /**
    * Filtre les ventes selon les critères donnés
@@ -238,10 +338,12 @@ class SalesService {
       );
     }
 
-    // Filtre par consentement
-    if (filters.consent && filters.consent.length > 0) {
+    // Filtre par statut de commande
+    if (filters.orderStatus && filters.orderStatus.length > 0) {
       filtered = filtered.filter((sale) =>
-        filters.consent!.includes(sale.consent)
+        filters.orderStatus!.includes(
+          this.normalizeOrderStatus((sale as any).orderStatus)
+        )
       );
     }
 
@@ -326,7 +428,13 @@ class SalesService {
    */
   async updateSale(saleId: string, updatedData: Partial<Sale>): Promise<void> {
     try {
-      await updateDoc(doc(db, "sales", saleId), updatedData);
+      const dataToSave = { ...updatedData } as any;
+      if (dataToSave.orderStatus) {
+        dataToSave.orderStatus = this.normalizeOrderStatus(
+          dataToSave.orderStatus
+        );
+      }
+      await updateDoc(doc(db, "sales", saleId), dataToSave);
     } catch (error) {
       console.error("Erreur lors de la modification:", error);
       throw new Error("Impossible de modifier la vente");
@@ -343,6 +451,50 @@ class SalesService {
       console.error("Erreur lors de la suppression:", error);
       throw new Error("Impossible de supprimer la vente");
     }
+  }
+
+  /**
+   * Met à jour en masse le statut des ventes pour une plage de dates.
+   * Les dates sont des chaînes au format YYYY-MM-DD (inclusives).
+   */
+  async bulkUpdateOrderStatus(params: {
+    startDate: string;
+    endDate: string;
+    fromStatuses?: OrderStatus[]; // si non fourni, met à jour tout
+    toStatus: OrderStatus;
+  }): Promise<{ updated: number }>
+  {
+    const { startDate, endDate, fromStatuses, toStatus } = params;
+
+    const all = await this.getAllSales();
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    const candidates = all.filter((s) => {
+      const d = this.parseDate(s.date);
+      if (!d) return false;
+      const inRange = d >= start && d <= end;
+      if (!inRange) return false;
+      if (!fromStatuses || fromStatuses.length === 0) return true;
+      return fromStatuses.includes(this.normalizeOrderStatus((s as any).orderStatus));
+    });
+
+    let updated = 0;
+    // Batch writes par paquets (limite Firestore ~500)
+    for (let i = 0; i < candidates.length; i += 400) {
+      const batch = writeBatch(db);
+      const slice = candidates.slice(i, i + 400);
+      slice.forEach((s) => {
+        const ref = doc(db, "sales", s.id);
+        batch.update(ref, { orderStatus: toStatus });
+      });
+      await batch.commit();
+      updated += slice.length;
+    }
+
+    return { updated };
   }
 
   /**
@@ -363,7 +515,7 @@ class SalesService {
       "Vendeur",
       "N° Commande",
       "Offre",
-      "Consentement",
+      "Statut commande",
       "Client_Nom",
       "Client_Prenom",
       "Client_Telephone"
@@ -385,40 +537,44 @@ class SalesService {
         const saleDate = this.parseDate(sale.date);
         const offerName = this.getOfferName(sale.offer);
         const heure = saleDate ? saleDate.toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "";
+        // Mapping for display
+        const statusLabels: Record<OrderStatus, string> = {
+          en_attente: "En attente",
+          valide: "Validé",
+          probleme_iban: "Problème IBAN",
+          roac: "ROAC",
+          validation_soft: "Valid Soft"
+        };
         return [
           saleDate ? saleDate.toLocaleDateString("fr-FR") : "",
           heure,
-            sale.name,
+          sale.name,
           sale.orderNumber,
           offerName,
-          sale.consent === "yes" ? "Oui" : "En attente",
+          statusLabels[sale.orderStatus] || sale.orderStatus,
           sale.clientLastName || "",
           sale.clientFirstName || "",
           sale.clientPhone || "",
         ].map(escapeCSV).join(";");
       }),
     ].join("\r\n"); // Utilise CRLF pour compatibilité Excel
-
     return csvContent;
   }
 
   /**
-   * Télécharge un fichier CSV
+   * Récupère toutes les ventes avec un certain statut (pour le dashboard)
    */
-  downloadCSV(csvContent: string, filename?: string): void {
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      filename ||
-        `ventes_canal_plus_${new Date().toISOString().split("T")[0]}.csv`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  async getSalesWithStatus(status: OrderStatus): Promise<Sale[]> {
+    try {
+      const allSales = await this.getAllSales();
+      return allSales.filter((sale) => sale.orderStatus === status);
+    } catch (error) {
+      console.error(
+        "Erreur lors du chargement des ventes avec statut:",
+        error
+      );
+      throw error;
+    }
   }
 
   /**
@@ -776,18 +932,18 @@ class SalesService {
       );
 
       const snapshot = await getDocs(q);
-      let countWithConsent = 0;
+      let countWithStatus = 0;
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
         // Filtrage JS par userId si présent
         if (
-          data.consent === "yes" &&
+          data.orderStatus === "valide" &&
           (!periodData.userId || data.userId === periodData.userId)
         ) {
-          countWithConsent++;
+          countWithStatus++;
         }
       });
-      return countWithConsent;
+  return countWithStatus;
     } catch (error) {
       console.error("Erreur lors du comptage des ventes pour la période:", error);
       return 0;

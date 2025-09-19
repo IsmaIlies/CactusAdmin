@@ -1,10 +1,53 @@
 import React, { useState, useEffect } from "react";
+import CallClosuresPanel, { CallClosure } from "../components/CallClosuresPanel";
+// Référentiel des statuts d'appel (constant en dehors du composant)
+export const callClosures: CallClosure[] = [
+  { code: "CAPLUS", description: "CAPLUS", type: "CA+" },
+  { code: "CAPLUSAT", description: "CAPLUSAT", type: "CA+" },
+  { code: "ECC", description: "ENGAGE CHEZ CONCURRENT", type: "CA-" },
+  { code: "MO", description: "MECONTENT ORANGE", type: "CA-" },
+  { code: "RCB", description: "REFUS COORDONNEES BANCAIRES", type: "CA-" },
+  { code: "RETR", description: "RETRACTATION", type: "CA-" },
+  { code: "RRENG", description: "REFUSE DE SE REENGAGER", type: "CA-" },
+  { code: "RIO", description: "REFUS RIO / PORTABILITE", type: "CA-" },
+  { code: "ROAC", description: "REFUS OFFRE AVANT CONSENTEMENT", type: "CA-" },
+  { code: "ROFC", description: "SATISFAIT OFFRE CONCURRENCE", type: "CA-" },
+  { code: "ROFI", description: "REFUS OFFRE", type: "CA-" },
+  { code: "ROIC", description: "INTERESSE PAR OFFRE CONCURRENCE", type: "CA-" },
+  { code: "ROIN", description: "NON ELIGIBLE TV", type: "CA-" },
+  { code: "ROSI", description: "REFUS OFFRE SIE / KO TECHNIQUE", type: "CA-" },
+  { code: "ROSIC", description: "REFUS OFFRE / SPECIFICITES COMMERCIALES", type: "CA-" },
+  { code: "ROT", description: "REFUS TARIF", type: "CA-" },
+  { code: "ROVB", description: "REFUS VEUT ALLER BOUTIQUE", type: "CA-" },
+  { code: "ADCO", description: "A DEJA L'OFFRE", type: "CNAI" },
+  { code: "ADNE", description: "A DEMENAGE NON ELIGIBLE", type: "CNAI" },
+  { code: "BAR", description: "BARRAGE", type: "CNAI" },
+  { code: "CESA", description: "CESSATION D'ACTIVITE", type: "CNAI" },
+  { code: "DI", description: "DIALOGUE IMPOSSIBLE", type: "CNAI" },
+  { code: "DOU", description: "DOUBLON APPEL", type: "CNAI" },
+  { code: "FAU", description: "FAUX NUMERO", type: "CNAI" },
+  { code: "FAX", description: "FAX", type: "CNAI" },
+  { code: "GEL", description: "GEL - NE PAS APPELER ORANGE", type: "CNAI" },
+  { code: "HC", description: "AUTRE CAS (HORS CIBLE)", type: "CNAI" },
+  { code: "INJ", description: "INJOIGNABLE", type: "CNAI" },
+  { code: "ITFI", description: "INSTALLATION TECHNIQUE FIBRE IMPOSSIBLE", type: "CNAI" },
+  { code: "NEF", description: "NON ELIGIBLE FIBRE", type: "CNAI" },
+  { code: "NPAI", description: "N'HABITE PAS A L'ADRESSE INDIQUEE", type: "CNAI" },
+  { code: "NPI", description: "PAS EQUIPE PC", type: "AUTRE" },
+  { code: "NR", description: "NE PLUS CONTACTER PACITEL", type: "CNAI" },
+  { code: "RE", description: "RAPPEL", type: "CALL" },
+  { code: "SND", description: "SITE NON DECISIONNAIRE", type: "CNAI" },
+  { code: "SR", description: "SOUHAITE RESILIER", type: "CA-" },
+  { code: "SUP65", description: "SUP65 / NON USAGE", type: "CA-" },
+  { code: "CALL2", description: "CALL FINALISATION VENTE", type: "CALL" },
+];
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { app } from "../firebase";
+import { app, db } from "../firebase";
 import salesService, {
   Sale,
   OFFERS,
   ContactsArgues,
+  OrderStatus,
 } from "../services/salesService";
 import SalesFilters from "../components/admin/SalesFilters";
 import SalesTable from "../components/admin/SalesTable";
@@ -14,7 +57,98 @@ import ContactsArguesModal from "../components/admin/ContactsArguesModal";
 import { Mail, Download, Calendar, Save, BarChart3 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { onSnapshot, collection, query, orderBy } from "firebase/firestore";
-import { db } from "../firebase";
+
+// --- Normaliseurs de statuts ---
+
+// 1) Mapping direct du basketStatus (côté page Ventes)
+const mapBasketStatusToOrderStatus = (basket: any): OrderStatus => {
+  const raw = (basket ?? "").toString().toUpperCase().trim();
+
+  switch (raw) {
+    case "OK":
+      return "valide";
+    case "VALID FINALE":
+    case "VALIDATION FINALE":
+    case "VALID SOFT":
+    case "VALIDATION SOFT":
+      return "validation_soft"; // renommé (anciennement validation_finale)
+    case "ATT":
+    case "EN ATTENTE":
+    case "ATTENTE":
+      return "en_attente";
+    case "PROBLÈME IBAN":
+    case "PROBLEME IBAN":
+    case "PROBLEME_IBAN":
+      return "probleme_iban";
+    case "ROAC":
+      return "roac";
+    default:
+      // On repasse par la normalisation générique (au cas où d'autres valeurs)
+      return normalizeOrderStatus(raw);
+  }
+};
+
+// 2) Normalisation générique (compat legacy)
+const normalizeOrderStatus = (value: any): OrderStatus => {
+  if (value === true) return "valide";
+  if (typeof value === "number") return value > 0 ? "valide" : "en_attente";
+
+  const raw = (value ?? "").toString().toLowerCase();
+  const normalized = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "_");
+
+  const isValid = [
+    "valide",
+    "validee",
+    "valid",
+    "validated",
+    "approve",
+    "approved",
+    "ok",
+    "done",
+    "oui",
+    "yes",
+    "true",
+    "1",
+    "completed",
+    "complete",
+  ].includes(normalized);
+  if (isValid) return "valide";
+
+  if (
+    normalized.includes("iban") ||
+    normalized === "probleme_iban" ||
+    normalized === "problemeiban"
+  ) {
+    return "probleme_iban";
+  }
+  if (normalized.includes("final") || normalized.includes("soft")) return "validation_soft"; // backward compat
+  if (normalized.includes("roac")) return "roac";
+
+  const isPending = [
+    "en_attente",
+    "attente",
+    "enattente",
+    "pending",
+    "en_cours",
+    "processing",
+    "wait",
+    "waiting",
+    "non",
+    "false",
+    "0",
+    "todo",
+  ].includes(normalized);
+  if (isPending) return "en_attente";
+
+  if (normalized.includes("valid")) return "valide";
+  if (normalized.includes("attent") || normalized.includes("pend"))
+    return "en_attente";
+
+  return "en_attente";
+};
 
 const AdminSalesPage: React.FC = () => {
   const { user } = useAuth();
@@ -27,78 +161,91 @@ const AdminSalesPage: React.FC = () => {
   const [sendingWeeklyReport, setSendingWeeklyReport] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showWeeklyReportModal, setShowWeeklyReportModal] = useState(false);
+  // Panel d'affichage des codes de clôture
+  const [showClosuresPanel, setShowClosuresPanel] = useState(false);
 
   // Filtres
   const [selectedOffers, setSelectedOffers] = useState<string[]>([]);
   const [selectedSellers, setSelectedSellers] = useState<string[]>([]);
-  const [selectedConsent, setSelectedConsent] = useState<string[]>(["yes"]);
+  // Par défaut : on affiche uniquement les ventes validées (espace TA)
+  const [selectedOrderStatus, setSelectedOrderStatus] =
+    useState<OrderStatus[]>(["valide"]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
   // Contacts argumentés
   const [contactsArgues, setContactsArgues] = useState<string>("0");
   const [isEditingContacts, setIsEditingContacts] = useState(false);
-  const [contactsArguesHistory, setContactsArguesHistory] = useState<
-    ContactsArgues[]
-  >([]);
+  const [contactsArguesHistory, setContactsArguesHistory] = useState<ContactsArgues[]>([]);
   const [loadingContactsArgues, setLoadingContactsArgues] = useState(true);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [savingContactsArgues, setSavingContactsArgues] = useState(false);
-  const [periodContactsArgues, setPeriodContactsArgues] = useState<number>(0); // Total des CA pour la période filtrée
+  const [periodContactsArgues, setPeriodContactsArgues] = useState<number>(0);
 
-  // Mise à jour en temps réel des ventes
+  // --- Écoute temps réel des ventes (avec normalisation basketStatus → orderStatus) ---
   useEffect(() => {
-    const setupRealtimeListener = () => {
-      try {
-        setLoading(true);
-        setError("");
+    setLoading(true);
+    setError("");
 
-        // Créer une requête pour écouter les changements dans la collection "sales"
-        const salesQuery = query(
-          collection(db, "sales"),
-          orderBy("date", "desc")
-        );
+    const salesQuery = query(collection(db, "sales"), orderBy("date", "desc"));
 
-        // Écouter les changements en temps réel
-        const unsubscribe = onSnapshot(
-          salesQuery,
-          (snapshot) => {
-            const salesData: Sale[] = [];
-            snapshot.forEach((doc) => {
-              const data = doc.data();
-              salesData.push({
-                id: doc.id,
-                ...data,
-              } as Sale);
-            });
+    const unsubscribe = onSnapshot(
+      salesQuery,
+      (snapshot) => {
+        const salesData: Sale[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          salesData.push({
+            id: doc.id,
+            ...(data as any),
+          } as Sale);
+        });
 
-            setSales(salesData);
-            setLoading(false);
-          },
-          (error) => {
-            console.error("Erreur lors de l'écoute des ventes:", error);
-            setError(error.message || "Erreur lors du chargement des ventes");
-            setLoading(false);
+        const normalized: Sale[] = salesData.map((s: any) => {
+          // 1) si on a un basketStatus (cas page Ventes), on mappe directement
+          const basket =
+            s?.basketStatus ??
+            s?.basket_status ??
+            s?.statut_panier ??
+            s?.panierStatut;
+
+          let orderStatus: OrderStatus | undefined;
+
+          if (basket != null && basket !== "") {
+            orderStatus = mapBasketStatusToOrderStatus(basket);
+          } else {
+            // 2) sinon on tente les champs historiques
+            const candidateStatus =
+              s?.orderStatus ??
+              s?.status ??
+              s?.order_status ??
+              s?.statut ??
+              s?.statut_commande ??
+              s?.status_commande ??
+              (s?.consent === "yes" || s?.consentement === "yes"
+                ? "valide"
+                : undefined);
+
+            orderStatus = normalizeOrderStatus(candidateStatus);
           }
-        );
 
-        // Retourner la fonction de nettoyage
-        return unsubscribe;
-      } catch (err: any) {
-        console.error("Erreur lors de la configuration de l'écoute:", err);
-        setError(err.message || "Erreur lors de la configuration de l'écoute");
+          return {
+            ...s,
+            orderStatus, // champ utilisé par les filtres/table Admin
+          } as Sale;
+        });
+
+        setSales(normalized);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Erreur lors de l'écoute des ventes:", err);
+        setError(err.message || "Erreur lors du chargement des ventes");
         setLoading(false);
       }
-    };
+    );
 
-    const unsubscribe = setupRealtimeListener();
-
-    // Nettoyage lors du démontage du composant
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
+    return () => unsubscribe();
   }, []);
 
   // Charger les contacts argumentés
@@ -106,100 +253,65 @@ const AdminSalesPage: React.FC = () => {
     const fetchContactsArgues = async () => {
       try {
         setLoadingContactsArgues(true);
-
-        // Charger les contacts argumentés pour aujourd'hui
         const today = new Date().toISOString().split("T")[0];
-        const todayContacts = await salesService.getContactsArguesForDate(
-          today
-        );
+        const todayContacts = await salesService.getContactsArguesForDate(today);
         setContactsArgues(todayContacts.toString());
 
-        // Charger l'historique des contacts argumentés
         const recentContacts = await salesService.getRecentContactsArgues();
         setContactsArguesHistory(recentContacts);
       } catch (error) {
-        console.error(
-          "Erreur lors du chargement des contacts argumentés:",
-          error
-        );
+        console.error("Erreur lors du chargement des contacts argumentés:", error);
       } finally {
         setLoadingContactsArgues(false);
       }
     };
-
     fetchContactsArgues();
   }, []);
 
-  // Filtrage des ventes via le service
+  // Filtrage via service (s'appuie sur sale.orderStatus)
   useEffect(() => {
     const filters = {
       offers: selectedOffers.length > 0 ? selectedOffers : undefined,
       sellers: selectedSellers.length > 0 ? selectedSellers : undefined,
-      consent: selectedConsent.length > 0 ? selectedConsent : undefined,
+      orderStatus: selectedOrderStatus.length > 0 ? selectedOrderStatus : undefined,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
     };
-
     const filtered = salesService.filterSales(sales, filters);
     setFilteredSales(filtered);
-  }, [
-    sales,
-    selectedOffers,
-    selectedSellers,
-    selectedConsent,
-    startDate,
-    endDate,
-  ]);
+  }, [sales, selectedOffers, selectedSellers, selectedOrderStatus, startDate, endDate]);
 
-  // Calculer les contacts argumentés pour la période sélectionnée
+  // Calcul CA période
   useEffect(() => {
     const calculatePeriodContactsArgues = async () => {
       try {
-        // Si on n'a pas d'historique de CA, ne rien faire
         if (contactsArguesHistory.length === 0) return;
-
-        // Date du jour au format YYYY-MM-DD
         const today = new Date().toISOString().split("T")[0];
         let filteredContacts: ContactsArgues[] = [];
 
         if (startDate && endDate) {
-          // Période spécifique : du startDate au endDate
           filteredContacts = contactsArguesHistory.filter(
             (ca) => ca.date >= startDate && ca.date <= endDate
           );
         } else if (startDate && !endDate) {
-          // Du startDate à aujourd'hui
           filteredContacts = contactsArguesHistory.filter(
             (ca) => ca.date >= startDate && ca.date <= today
           );
         } else if (!startDate && endDate) {
-          // Jusqu'à la date de fin
-          filteredContacts = contactsArguesHistory.filter(
-            (ca) => ca.date <= endDate
-          );
+          filteredContacts = contactsArguesHistory.filter((ca) => ca.date <= endDate);
         } else {
-          // Pas de filtre de date, on prend tout l'historique
           filteredContacts = [...contactsArguesHistory];
         }
 
-        // Si les dates sélectionnées ne contiennent pas de CA dans notre historique,
-        // chargeons les données directement depuis Firestore
         if (filteredContacts.length === 0 && (startDate || endDate)) {
-          const caData = await salesService.getContactsArguesForPeriod(
-            startDate,
-            endDate
-          );
+          const caData = await salesService.getContactsArguesForPeriod(startDate, endDate);
           filteredContacts = caData;
         }
 
-        // Calculer la somme des CA pour la période
         const total = filteredContacts.reduce((sum, ca) => sum + ca.count, 0);
         setPeriodContactsArgues(total);
       } catch (error) {
-        console.error(
-          "Erreur lors du calcul des contacts argumentés pour la période:",
-          error
-        );
+        console.error("Erreur lors du calcul des contacts argumentés:", error);
       }
     };
 
@@ -211,7 +323,7 @@ const AdminSalesPage: React.FC = () => {
   const handleClearFilters = () => {
     setSelectedOffers([]);
     setSelectedSellers([]);
-    setSelectedConsent(["yes"]);
+    setSelectedOrderStatus(["valide"]); // défaut TA
     setStartDate("");
     setEndDate("");
   };
@@ -241,45 +353,44 @@ const AdminSalesPage: React.FC = () => {
     }
   };
 
+  const periodContactsNumber = periodContactsArgues || 0;
+  const conversionRate =
+    periodContactsNumber > 0
+      ? ((filteredSales.length / periodContactsNumber) * 100).toFixed(1)
+      : "0";
+
   const handleSendRecap = async (recipients: string[]) => {
     try {
       setSendingEmail(true);
-
       const functions = getFunctions(app, "europe-west9");
       const sendSalesRecap = httpsCallable(functions, "sendSalesRecap");
 
-      // Préparer la période
       let period = "";
       if (startDate && endDate) {
-        if (startDate === endDate) {
-          period = `Le ${new Date(startDate).toLocaleDateString("fr-FR")}`;
-        } else {
-          period = `Du ${new Date(startDate).toLocaleDateString(
-            "fr-FR"
-          )} au ${new Date(endDate).toLocaleDateString("fr-FR")}`;
-        }
+        period =
+          startDate === endDate
+            ? `Le ${new Date(startDate).toLocaleDateString("fr-FR")}`
+            : `Du ${new Date(startDate).toLocaleDateString(
+                "fr-FR"
+              )} au ${new Date(endDate).toLocaleDateString("fr-FR")}`;
       } else if (startDate) {
-        period = `À partir du ${new Date(startDate).toLocaleDateString(
-          "fr-FR"
-        )}`;
+        period = `À partir du ${new Date(startDate).toLocaleDateString("fr-FR")}`;
       } else if (endDate) {
         period = `Jusqu'au ${new Date(endDate).toLocaleDateString("fr-FR")}`;
       } else {
         period = "Toutes les ventes";
       }
 
-      // Utiliser le nombre de contacts argumentés de la période sélectionnée
       const caForPeriod = periodContactsNumber.toString();
 
       const result = await sendSalesRecap({
         salesData: filteredSales,
         contactsArgues: caForPeriod,
-        period: period,
-        recipients: recipients,
+        period,
+        recipients,
       });
 
       const data = result.data as { success: boolean; message: string };
-
       if (data.success) {
         alert("✅ " + data.message);
         setShowEmailModal(false);
@@ -288,10 +399,7 @@ const AdminSalesPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error("Erreur lors de l'envoi du récapitulatif:", error);
-      alert(
-        "❌ Erreur: " +
-          (error.message || "Erreur lors de l'envoi du récapitulatif")
-      );
+      alert("❌ Erreur: " + (error.message || "Erreur lors de l'envoi du récapitulatif"));
     } finally {
       setSendingEmail(false);
     }
@@ -300,43 +408,34 @@ const AdminSalesPage: React.FC = () => {
   const handleSendWeeklyReport = async (recipients: string[]) => {
     try {
       setSendingWeeklyReport(true);
-
       const functions = getFunctions(app, "europe-west9");
       const sendWeeklyReport = httpsCallable(functions, "sendWeeklyReport");
 
-      // Calculer le début et la fin du mois en cours
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-      // Filtrer les ventes du mois en cours avec consentement "oui" uniquement
+      // Ventes du mois courant avec statut "valide"
       const monthSales = sales.filter((sale) => {
         const saleDate = salesService.parseDate(sale.date);
-        if (!saleDate || sale.consent !== "yes") {
-          return false;
-        }
-
-        // Vérifier que la date est bien dans le mois en cours
-        const saleMonth = saleDate.getMonth();
-        const saleYear = saleDate.getFullYear();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        return saleMonth === currentMonth && saleYear === currentYear;
+        if (!saleDate || (sale as any).orderStatus !== "valide") return false;
+        return (
+          saleDate.getMonth() === now.getMonth() &&
+          saleDate.getFullYear() === now.getFullYear()
+        );
       });
 
-      // Récupérer les contacts argumentés du mois en cours
       const monthContactsArgues = await salesService.getContactsArguesForPeriod(
         startOfMonth.toISOString().split("T")[0],
         endOfMonth.toISOString().split("T")[0]
       );
 
-      // Filtrer les contacts argumentés pour s'assurer qu'ils sont du mois en cours
       const filteredContactsArgues = monthContactsArgues.filter((ca) => {
         const caDate = new Date(ca.date);
-        const caMonth = caDate.getMonth();
-        const caYear = caDate.getFullYear();
-        return caMonth === now.getMonth() && caYear === now.getFullYear();
+        return (
+          caDate.getMonth() === now.getMonth() &&
+          caDate.getFullYear() === now.getFullYear()
+        );
       });
 
       const result = await sendWeeklyReport({
@@ -344,11 +443,10 @@ const AdminSalesPage: React.FC = () => {
         contactsArguesData: filteredContactsArgues,
         startDate: startOfMonth.toISOString().split("T")[0],
         endDate: endOfMonth.toISOString().split("T")[0],
-        recipients: recipients,
+        recipients,
       });
 
       const data = result.data as { success: boolean; message: string };
-
       if (data.success) {
         alert("✅ " + data.message);
         setShowWeeklyReportModal(false);
@@ -357,32 +455,33 @@ const AdminSalesPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error("Erreur lors de l'envoi du rapport hebdomadaire:", error);
-      alert(
-        "❌ Erreur: " +
-          (error.message || "Erreur lors de l'envoi du rapport hebdomadaire")
-      );
+      alert("❌ Erreur: " + (error.message || "Erreur lors de l'envoi du rapport hebdomadaire"));
     } finally {
       setSendingWeeklyReport(false);
     }
   };
 
-  const handleOpenEmailModal = () => {
-    setShowEmailModal(true);
-  };
-
-  const handleOpenWeeklyReportModal = () => {
-    setShowWeeklyReportModal(true);
-  };
+  const handleOpenEmailModal = () => setShowEmailModal(true);
+  const handleOpenWeeklyReportModal = () => setShowWeeklyReportModal(true);
 
   const handleExportCSV = () => {
     const csvContent = salesService.exportToCSV(filteredSales);
-    salesService.downloadCSV(csvContent);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `ventes_canal_plus_${new Date().toISOString().split("T")[0]}.csv`
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  // Bouton WhatsApp
   const handleSendWhatsApp = () => {
-    // Numéro au format international sans + ni espaces (France : 33)
-    const numero = "33641039226";
+    const numero = "33641039226"; // format international sans +
     const message = `Récapitulatif Canal+\nVentes : ${filteredSales.length}\nContacts argumentés : ${periodContactsNumber}\nTaux de concrétisation : ${conversionRate}%`;
     const url = `https://wa.me/${numero}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
@@ -393,78 +492,41 @@ const AdminSalesPage: React.FC = () => {
       setContactsArgues(value);
     }
   };
-
   const handleContactsBlur = () => {
     setIsEditingContacts(false);
-    if (contactsArgues === "") {
-      setContactsArgues("0");
-    }
+    if (contactsArgues === "") setContactsArgues("0");
   };
+  const handleContactsFocus = () => setIsEditingContacts(true);
 
-  const handleContactsFocus = () => {
-    setIsEditingContacts(true);
-  };
-
-  // Méthode pour sauvegarder les contacts argumentés d'aujourd'hui
   const handleSaveContactsArgues = async () => {
     try {
       setSavingContactsArgues(true);
-
-      // Date d'aujourd'hui au format YYYY-MM-DD
       const today = new Date().toISOString().split("T")[0];
       const count = parseInt(contactsArgues) || 0;
-
-      // Sauvegarder dans Firestore
-      await salesService.saveContactsArgues(today, count, user?.id);
-
-      // Mettre à jour l'historique
+      await salesService.saveContactsArgues(today, count, (user as any)?.uid);
       const updatedHistory = await salesService.getRecentContactsArgues();
       setContactsArguesHistory(updatedHistory);
     } catch (error) {
-      console.error(
-        "Erreur lors de l'enregistrement des contacts argumentés:",
-        error
-      );
+      console.error("Erreur lors de l'enregistrement des CA:", error);
       alert("Erreur lors de l'enregistrement des contacts argumentés");
     } finally {
       setSavingContactsArgues(false);
     }
   };
 
-  // Méthode pour sauvegarder les contacts argumentés d'une date spécifique depuis le modal
-  const handleSaveHistoricalContactsArgues = async (
-    date: string,
-    count: number
-  ) => {
+  const handleSaveHistoricalContactsArgues = async (date: string, count: number) => {
     try {
-      await salesService.saveContactsArgues(date, count, user?.id);
-
-      // Mettre à jour l'historique
+      await salesService.saveContactsArgues(date, count, (user as any)?.uid);
       const updatedHistory = await salesService.getRecentContactsArgues();
       setContactsArguesHistory(updatedHistory);
-
-      // Si c'est aujourd'hui, mettre également à jour le champ principal
       const today = new Date().toISOString().split("T")[0];
-      if (date === today) {
-        setContactsArgues(count.toString());
-      }
-
+      if (date === today) setContactsArgues(count.toString());
       return Promise.resolve();
     } catch (error) {
-      console.error(
-        "Erreur lors de l'enregistrement des contacts argumentés:",
-        error
-      );
+      console.error("Erreur lors de l'enregistrement des CA historiques:", error);
       return Promise.reject(error);
     }
   };
-
-  // Calculs des statistiques
-  const periodContactsNumber = periodContactsArgues || 0;
-  const conversionRate =
-    periodContactsNumber > 0
-      ? ((filteredSales.length / periodContactsNumber) * 100).toFixed(1)
-      : "0";
 
   if (loading) {
     return (
@@ -495,10 +557,7 @@ const AdminSalesPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Gestion des ventes
-          </h1>
-          {/* Badge Canal+ */}
+          <h1 className="text-2xl font-bold text-gray-900">Gestion des ventes</h1>
           <div className="flex items-center gap-2 bg-black text-white px-3 py-1 rounded-full text-sm">
             <img
               src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Logo_Canal%2B_1995.svg/1200px-Logo_Canal%2B_1995.svg.png"
@@ -512,7 +571,6 @@ const AdminSalesPage: React.FC = () => {
 
       {/* Statistiques rapides */}
       <div className="space-y-4">
-        {/* Première ligne : Ventes listées */}
         <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center">
@@ -520,18 +578,14 @@ const AdminSalesPage: React.FC = () => {
                 <span className="text-2xl">👥</span>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">
-                  Ventes Canal+ listées
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {filteredSales.length}
-                </p>
+                <p className="text-sm font-medium text-gray-600">Ventes Canal+ listées</p>
+                <p className="text-2xl font-bold text-gray-900">{filteredSales.length}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Deuxième ligne : Contacts argumentés et Taux de concrétisation */}
+        {/* CA + Taux */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between">
@@ -555,9 +609,7 @@ const AdminSalesPage: React.FC = () => {
                           ? "text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-300"
                           : "text-gray-900"
                       }`}
-                      style={{
-                        width: `${Math.max(contactsArgues.length * 20, 60)}px`,
-                      }}
+                      style={{ width: `${Math.max(contactsArgues.length * 20, 60)}px` }}
                       placeholder="0"
                     />
                     <button
@@ -574,9 +626,7 @@ const AdminSalesPage: React.FC = () => {
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    {isEditingContacts
-                      ? "Tapez un nombre puis enregistrez"
-                      : "Cliquez pour modifier"}
+                    {isEditingContacts ? "Tapez un nombre puis enregistrez" : "Cliquez pour modifier"}
                   </p>
                 </div>
               </div>
@@ -596,15 +646,10 @@ const AdminSalesPage: React.FC = () => {
                 <span className="text-2xl">📊</span>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">
-                  Taux de concrétisation
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {conversionRate}%
-                </p>
+                <p className="text-sm font-medium text-gray-600">Taux de concrétisation</p>
+                <p className="text-2xl font-bold text-gray-900">{conversionRate}%</p>
                 <p className="text-xs text-gray-500">
-                  {filteredSales.length} ventes / {periodContactsNumber}{" "}
-                  contacts argumentés{" "}
+                  {filteredSales.length} ventes / {periodContactsNumber} contacts argumentés{" "}
                   {startDate || endDate ? "sur la période" : "au total"}
                 </p>
               </div>
@@ -612,13 +657,25 @@ const AdminSalesPage: React.FC = () => {
           </div>
         </div>
       </div>
-      {/* En-tête avec contacts argumentés et actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2"></div>
-        </div>
 
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+        <div className="flex items-center gap-4"></div>
         <div className="flex items-center gap-2">
+          {/* Bouton animé pour ouvrir le panel des codes de clôture */}
+          <button
+            onClick={() => setShowClosuresPanel(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cactus-500 via-cactus-400 to-cactus-600 text-white rounded-lg shadow-lg hover:scale-105 transition-transform duration-300"
+            style={{ animation: "pulse 1.5s infinite" }}
+          >
+            <svg className="w-5 h-5 animate-spin mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            Codes de clôture
+          </button>
+  {/* Panel des codes de clôture d'appel */}
+  <CallClosuresPanel open={showClosuresPanel} onClose={() => setShowClosuresPanel(false)} closures={callClosures} />
           <button
             onClick={handleOpenEmailModal}
             disabled={sendingEmail}
@@ -655,15 +712,14 @@ const AdminSalesPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Filtres */}
         <div className="lg:col-span-1">
           <SalesFilters
             selectedOffers={selectedOffers}
             setSelectedOffers={setSelectedOffers}
             selectedSellers={selectedSellers}
             setSelectedSellers={setSelectedSellers}
-            selectedConsent={selectedConsent}
-            setSelectedConsent={setSelectedConsent}
+            selectedOrderStatus={selectedOrderStatus}
+            setSelectedOrderStatus={setSelectedOrderStatus}
             startDate={startDate}
             setStartDate={setStartDate}
             endDate={endDate}
@@ -674,7 +730,6 @@ const AdminSalesPage: React.FC = () => {
           />
         </div>
 
-        {/* Tableau des ventes */}
         <div className="lg:col-span-3">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -683,8 +738,7 @@ const AdminSalesPage: React.FC = () => {
                   Ventes Canal+ ({filteredSales.length})
                 </h3>
                 <p className="text-sm text-gray-600">
-                  {filteredSales.length} vente
-                  {filteredSales.length > 1 ? "s" : ""} Canal+ trouvée
+                  {filteredSales.length} vente{filteredSales.length > 1 ? "s" : ""} Canal+ trouvée
                   {filteredSales.length > 1 ? "s" : ""}
                 </p>
               </div>
@@ -700,7 +754,6 @@ const AdminSalesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal d'édition */}
       <EditSaleModal
         sale={editingSale}
         offers={OFFERS}
@@ -708,7 +761,6 @@ const AdminSalesPage: React.FC = () => {
         onClose={() => setEditingSale(null)}
       />
 
-      {/* Modal de sélection des destinataires */}
       <EmailRecipientsModal
         isOpen={showEmailModal}
         onClose={() => setShowEmailModal(false)}
@@ -716,7 +768,6 @@ const AdminSalesPage: React.FC = () => {
         isLoading={sendingEmail}
       />
 
-      {/* Modal de sélection des destinataires pour le rapport hebdomadaire */}
       <EmailRecipientsModal
         isOpen={showWeeklyReportModal}
         onClose={() => setShowWeeklyReportModal(false)}
@@ -724,7 +775,6 @@ const AdminSalesPage: React.FC = () => {
         isLoading={sendingWeeklyReport}
       />
 
-      {/* Modal de gestion des contacts argumentés */}
       <ContactsArguesModal
         isOpen={showContactsModal}
         onClose={() => setShowContactsModal(false)}

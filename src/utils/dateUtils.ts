@@ -37,3 +37,16 @@ export function getWeekNumber(date: Date): { year: number; week: number } {
     week: Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7),
   };
 }
+
+// Helpers pratiques pour la semaine/mois courants
+export function getWeekRange(date: Date = new Date()): { start: Date; end: Date } {
+  const { year, week } = getWeekNumber(date);
+  const { startDate, endDate } = getWeekDates(year, week);
+  return { start: startDate, end: endDate };
+}
+
+export function getMonthRange(date: Date = new Date()): { start: Date; end: Date } {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { start, end };
+}

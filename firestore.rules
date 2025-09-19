@@ -23,17 +23,16 @@ service cloud.firestore {
                     (request.auth.uid == resource.data.userId || hasAdminRole());
     }
 
-    // Règle générique pour toutes les sous-collections nommées "sales"
-    // Nécessaire pour autoriser les requêtes collectionGroup("sales") depuis le client
-    // Le glob {root=**} doit être le dernier segment d'une déclaration match, on le met donc
-    // en tant que bloc parent puis on définit la sous-collection 'sales' à l'intérieur.
-    match /{root=**} {
-      match /sales/{saleId} {
-        allow read: if request.auth != null;
-        allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-        // Permettre aux admins/direction/superviseurs de modifier/supprimer
-        allow update, delete: if request.auth != null && (request.auth.uid == resource.data.userId || hasAdminRole());
-      }
+    // Règles explicites pour toutes les collections et sous-collections "sales"
+    match /sales/{saleId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && (request.auth.uid == resource.data.userId || hasAdminRole());
+    }
+    match /missions/{missionId}/sales/{saleId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && (request.auth.uid == resource.data.userId || hasAdminRole());
     }
     
     // Règles pour la collection contactsArgues (CA)
@@ -64,14 +63,6 @@ service cloud.firestore {
       allow read, create, update: if hasAdminRole();
     }
     
-    // Règles pour les sous-collections des missions
-    match /missions/{missionId}/sales/{saleId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // Permettre aux admins/direction/superviseurs de tout modifier/supprimer
-      allow update, delete: if request.auth != null && 
-                            (request.auth.uid == resource.data.userId || hasAdminRole());
-    }
     
     match /missions/{missionId}/contactsArgues/{docId} {
       // Tous les utilisateurs connectés peuvent lire
@@ -91,6 +82,32 @@ service cloud.firestore {
     
     match /users/{userId}/chatHistories/{historyId}/messages/{messageId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Règles pour la collection teleacteurs (liste des agents)
+    match /teleacteurs/{agentId} {
+      // Tous les utilisateurs connectés peuvent lire la liste
+      allow read: if request.auth != null;
+      // Seuls admin/direction/superviseur peuvent créer/modifier/supprimer
+      allow create, update, delete: if hasAdminRole();
+    }
+
+    // Règles pour l'historique des recaps envoyés
+    match /recaps/{recapId} {
+      // Lecture pour utilisateurs connectés
+      allow read: if request.auth != null;
+      // Écriture/maj/suppression pour admin/direction/superviseur
+      allow create, update, delete: if hasAdminRole();
+    }
+    // Règles pour la collection news (Nouveautés)
+    match /news/{docId} {
+      // Tous les utilisateurs connectés peuvent lire
+      allow read: if request.auth != null;
+      // Création/mise à jour/suppression réservées aux rôles avancés
+      allow create, update, delete: if request.auth != null &&
+        (request.auth.token.admin == true ||
+         request.auth.token.direction == true ||
+         request.auth.token.superviseur == true);
     }
   }
 }

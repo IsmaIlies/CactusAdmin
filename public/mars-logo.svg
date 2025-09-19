@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="240" height="60" viewBox="0 0 240 60" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mars Marketing">
+  <rect x="0" y="0" width="240" height="60" rx="8" fill="#111827"/>
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="240" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F97316"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <text x="20" y="36" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="url(#g1)">Mars</text>
+  <text x="90" y="36" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#E5E7EB">Marketing</text>
+</svg>

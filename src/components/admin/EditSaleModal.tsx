@@ -1,16 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-interface Sale {
-  id: string;
-  date: any;
-  offer: string;
-  name: string;
-  orderNumber: string;
-  consent: string;
-  clientFirstName?: string;
-  clientLastName?: string;
-  clientPhone?: string;
-}
+import { Sale, OrderStatus } from '../../services/salesService';
 
 interface EditSaleModalProps {
   sale: Sale | null;
@@ -28,11 +18,11 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({
   const [formData, setFormData] = useState({
     orderNumber: '',
     offer: '',
-    consent: 'pending' as 'yes' | 'pending',
-  date: '',
-  clientFirstName: '',
-  clientLastName: '',
-  clientPhone: ''
+    orderStatus: 'en_attente' as OrderStatus,
+    date: '',
+    clientFirstName: '',
+    clientLastName: '',
+    clientPhone: ''
   });
 
   useEffect(() => {
@@ -40,7 +30,7 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({
       setFormData({
         orderNumber: sale.orderNumber,
         offer: sale.offer,
-        consent: sale.consent as 'yes' | 'pending',
+        orderStatus: sale.orderStatus as OrderStatus,
         date: sale.date ? (typeof sale.date === 'string' ? sale.date.split('T')[0] : new Date(sale.date.seconds ? sale.date.seconds * 1000 : sale.date).toISOString().split('T')[0]) : '',
         clientFirstName: sale.clientFirstName || '',
         clientLastName: sale.clientLastName || '',
@@ -153,31 +143,28 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Consentement
+              Statut commande
             </label>
             <div className="space-y-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="consent"
-                  value="yes"
-                  checked={formData.consent === 'yes'}
-                  onChange={(e) => setFormData({ ...formData, consent: e.target.value as 'yes' | 'pending' })}
-                  className="text-cactus-600 focus:ring-cactus-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">Oui</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="consent"
-                  value="pending"
-                  checked={formData.consent === 'pending'}
-                  onChange={(e) => setFormData({ ...formData, consent: e.target.value as 'yes' | 'pending' })}
-                  className="text-cactus-600 focus:ring-cactus-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">En attente</span>
-              </label>
+              {[
+                { value: 'en_attente', label: 'En attente' },
+                { value: 'valide', label: 'Validé' },
+                { value: 'probleme_iban', label: 'Problème IBAN' },
+                { value: 'roac', label: 'ROAC' },
+                { value: 'validation_soft', label: 'Valid Soft' },
+              ].map((status) => (
+                <label key={status.value} className="flex items-center">
+                  <input
+                    type="radio"
+                    name="orderStatus"
+                    value={status.value}
+                    checked={formData.orderStatus === status.value}
+                    onChange={(e) => setFormData({ ...formData, orderStatus: e.target.value as OrderStatus })}
+                    className="text-cactus-600 focus:ring-cactus-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">{status.label}</span>
+                </label>
+              ))}
             </div>
           </div>
 

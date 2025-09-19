@@ -1,12 +1,13 @@
 import React from 'react';
 
+import { OrderStatus } from '../../services/salesService';
 interface SalesFiltersProps {
   selectedOffers: string[];
   setSelectedOffers: (offers: string[]) => void;
   selectedSellers: string[];
   setSelectedSellers: (sellers: string[]) => void;
-  selectedConsent: string[];
-  setSelectedConsent: (consent: string[]) => void;
+  selectedOrderStatus: OrderStatus[];
+  setSelectedOrderStatus: (status: OrderStatus[]) => void;
   startDate: string;
   setStartDate: (date: string) => void;
   endDate: string;
@@ -21,8 +22,8 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
   setSelectedOffers,
   selectedSellers,
   setSelectedSellers,
-  selectedConsent,
-  setSelectedConsent,
+  selectedOrderStatus,
+  setSelectedOrderStatus,
   startDate,
   setStartDate,
   endDate,
@@ -47,19 +48,24 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
     );
   };
 
-  const toggleConsent = (consent: string) => {
-    setSelectedConsent(
-      selectedConsent.includes(consent)
-        ? selectedConsent.filter(c => c !== consent)
-        : [...selectedConsent, consent]
+
+  const toggleOrderStatus = (status: OrderStatus) => {
+    setSelectedOrderStatus(
+      selectedOrderStatus.includes(status)
+        ? selectedOrderStatus.filter(s => s !== status)
+        : [...selectedOrderStatus, status]
     );
   };
 
-  const hasActiveFilters = selectedOffers.length > 0 || selectedSellers.length > 0 || selectedConsent.length < 2 || startDate || endDate;
+  const hasActiveFilters = selectedOffers.length > 0 || selectedSellers.length > 0 || selectedOrderStatus.length < 5 || startDate || endDate;
 
-  const consentOptions = [
-    { id: 'yes', label: 'Oui', color: 'text-green-600', bgColor: 'bg-green-100' },
-    { id: 'pending', label: 'En attente', color: 'text-yellow-600', bgColor: 'bg-yellow-100' }
+
+  const orderStatusOptions: { id: OrderStatus; label: string; color: string; bgColor: string }[] = [
+    { id: 'en_attente', label: 'En attente', color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
+    { id: 'valide', label: 'Validé', color: 'text-green-600', bgColor: 'bg-green-100' },
+    { id: 'probleme_iban', label: 'Problème IBAN', color: 'text-red-600', bgColor: 'bg-red-100' },
+    { id: 'roac', label: 'ROAC', color: 'text-blue-600', bgColor: 'bg-blue-100' },
+  { id: 'validation_soft', label: 'Valid Soft', color: 'text-purple-600', bgColor: 'bg-purple-100' },
   ];
 
   return (
@@ -131,34 +137,32 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
         </div>
       </div>
 
-      {/* Filtres par consentement */}
+      {/* Filtres par statut de commande */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">
-          <span className="mr-2">✅</span>
-          Consentement
+          <span className="mr-2">📦</span>
+          Statut commande
         </label>
         <div className="flex flex-wrap gap-2">
-          {consentOptions.map(option => (
+          {orderStatusOptions.map(option => (
             <button
               key={option.id}
-              onClick={() => toggleConsent(option.id)}
+              onClick={() => toggleOrderStatus(option.id)}
               className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                selectedConsent.includes(option.id)
+                selectedOrderStatus.includes(option.id)
                   ? `${option.bgColor} ${option.color} border-current`
                   : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
               }`}
             >
               <span className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${
-                  option.id === 'yes' ? 'bg-green-500' : 'bg-yellow-500'
-                }`}></span>
+                <span className={`w-2 h-2 rounded-full ${option.bgColor.replace('bg-', 'bg-')}`}></span>
                 {option.label}
               </span>
             </button>
           ))}
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          Par défaut, seules les ventes avec consentement "Oui" sont affichées
+          Par défaut, toutes les ventes sont affichées
         </p>
       </div>
 

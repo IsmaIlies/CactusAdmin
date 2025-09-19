@@ -1,17 +1,6 @@
 import React, { useState } from "react";
 
-interface Sale {
-  id: string;
-  date: any;
-  offer: string;
-  name: string;
-  orderNumber: string;
-  consent: string;
-  userId?: string;
-  clientFirstName?: string;
-  clientLastName?: string;
-  clientPhone?: string;
-}
+import { Sale, OrderStatus } from '../../services/salesService';
 
 interface SalesTableProps {
   sales: Sale[];
@@ -109,7 +98,7 @@ const SalesTable: React.FC<SalesTableProps> = ({
               Offre {getSortIcon("offer")}
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Consentement
+              Statut commande
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nom client</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prénom client</th>
@@ -149,15 +138,22 @@ const SalesTable: React.FC<SalesTableProps> = ({
                   {getOfferName(sale.offer)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      sale.consent === "yes"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    }`}
-                  >
-                    {sale.consent === "yes" ? "Oui" : "En attente"}
-                  </span>
+                  {(() => {
+                    const statusLabels: Record<OrderStatus, { label: string; color: string }> = {
+                      en_attente: { label: "En attente", color: "bg-yellow-100 text-yellow-800" },
+                      valide: { label: "Validé", color: "bg-green-100 text-green-800" },
+                      probleme_iban: { label: "Problème IBAN", color: "bg-red-100 text-red-800" },
+                      roac: { label: "ROAC", color: "bg-blue-100 text-blue-800" },
+                      validation_soft: { label: "Valid Soft", color: "bg-purple-100 text-purple-800" },
+                    };
+                    const status = sale.orderStatus as OrderStatus;
+                    const { label, color } = statusLabels[status] || { label: status, color: "bg-gray-100 text-gray-800" };
+                    return (
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}>
+                        {label}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sale.clientLastName || '-'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sale.clientFirstName || '-'}</td>

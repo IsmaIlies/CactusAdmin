@@ -30,13 +30,15 @@ const ImportCsvPage: React.FC = () => {
 
   React.useEffect(() => {
     setLoading(true);
-    salesService.getAllSales().then((data) => {
-      setSales(data);
-      setLoading(false);
-    }).catch(() => {
-      setLoading(false);
-      setGlobalError("Erreur lors du chargement des ventes. Veuillez réessayer plus tard.");
-    });
+    salesService.getAllSales()
+      .then((data) => {
+        setSales(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+        setGlobalError("Erreur lors du chargement des ventes. Veuillez réessayer plus tard.");
+      });
   }, []);
 
   const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {

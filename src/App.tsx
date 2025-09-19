@@ -14,6 +14,8 @@ import DiagnosticPage from "./pages/DiagnosticPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import LeadsDashboardPage from "./pages/LeadsDashboardPage";
 import ImportCsvPage from "./pages/ImportCsvPage";
+import PresenceTAPage from "./pages/PresenceTAPage";
+import NouveautesPage from "./pages/NouveautesPage";
 
 function App() {
   return (
@@ -50,8 +52,17 @@ function App() {
               </AdminProtection>
             }
           />
+          <Route
+            path="/dashboard/presence-ta"
+            element={
+              <AdminProtection requiredRole="superviseur">
+                <PresenceTAPage />
+              </AdminProtection>
+            }
+          />
           <Route path="/dashboard/leads" element={<LeadsDashboardPage />} />
             <Route path="/dashboard/import-csv" element={<ImportCsvPage />} />
+          <Route path="/dashboard/nouveautes" element={<NouveautesPage />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </MissionProvider>

@@ -1,50 +1,64 @@
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const nodemailer = require("nodemailer");
 const axios = require("axios");
 
 admin.initializeApp();
 
-// Utilise les variables d'environnement Firebase pour sécuriser tes identifiants
-const user = process.env.EMAIL_USER || (process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG).email?.user : undefined);
-const pass = process.env.EMAIL_PASS || (process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG).email?.pass : undefined);
-console.log('Nodemailer user:', user);
-console.log('Nodemailer pass:', pass ? '***' : 'undefined');
+// Email sending helpers: now provider-agnostic (Sweego primary, Resend fallback)
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: { user, pass }
+// --- Envoi feuille de présence (TA) ---
+exports.sendAttendanceEmail = onCall({ region: "europe-west9" }, async (request) => {
+  const { date, present, absent, html, recipients } = request.data || {};
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Utilisateur non authentifié");
+  }
+  if (!date || !html) {
+    throw new HttpsError("invalid-argument", "Date et contenu requis");
+  }
+
+  const functions = require('firebase-functions');
+  const cfg = functions.config ? functions.config() : {};
+  const subject = `Feuille de présence TA - ${date}`;
+  const defaultRecipients = (process.env.ATTENDANCE_RECIPIENTS || cfg.attendance?.recipients || "i.boultame@mars-marketing.fr,i.brai@mars-marketing.fr")
+    .split(/[,;\s]+/)
+    .filter(Boolean);
+  const finalRecipients = Array.isArray(recipients) && recipients.length ? recipients : defaultRecipients;
+
+  try {
+    const { provider, meta } = await sendEmailUnified({ recipients: finalRecipients, subject, html });
+    return { success: true, provider, recipients: finalRecipients, meta };
+  } catch (e) {
+    console.error('[sendAttendanceEmail] error final', e);
+    if (e instanceof HttpsError) throw e;
+    // Erreur enrichie custom
+    if (e && e.code === 'EMAIL_SEND_FAILED') {
+      const status = e.status; const snippet = e.snippet; const prov = e.providerTried;
+      if (status === 401 || status === 403) throw new HttpsError('failed-precondition', `Provider ${prov} non autorisé (${status})`, { status, snippet });
+      if (status === 400) throw new HttpsError('invalid-argument', `Payload refusé (${prov})`, { status, snippet });
+      throw new HttpsError('internal', `Echec envoi (${prov})`, { status, snippet });
+    }
+    throw new HttpsError('internal', e.message || 'Erreur envoi présence');
+  }
 });
 
 exports.sendItRequestMail = onCall({ region: "europe-west9" }, async (request) => {
   const { prenom, nom } = request.data;
-  if (!prenom || !nom) {
-    throw new HttpsError("invalid-argument", "Prénom et nom requis");
-  }
-
-  // Log credentials for debug (do not log pass in production)
-  console.log('sendItRequestMail: user:', user);
-  console.log('sendItRequestMail: pass:', pass ? '***' : 'undefined');
-
+  if (!prenom || !nom) throw new HttpsError("invalid-argument", "Prénom et nom requis");
+  const functions = require('firebase-functions');
+  const cfg = functions.config ? functions.config() : {};
+  // Pas d'obligation Sweego maintenant : on bascule sur envoi unifié
+  const subject = "Demande de création d’adresse email pour un nouveau Téléacteur";
+  const emailBody = `Bonjour,\n\nMerci de bien vouloir créer une adresse email professionnelle pour le nouveau Téléacteur :\n\nPrénom Nom : ${prenom} ${nom}\nAdresse proposée : ${prenom.toLowerCase()}.${nom.toLowerCase()}@mars-marketing.com\n\nMerci d’avance.\nService IT`;
+  const html = `<p>Bonjour,</p><p>Merci de créer une adresse email pour le nouveau Téléacteur :</p><ul><li><strong>Prénom Nom</strong> : ${prenom} ${nom}</li><li><strong>Adresse proposée</strong> : ${prenom.toLowerCase()}.${nom.toLowerCase()}@mars-marketing.com</li></ul><p>Merci d'avance.<br/>Service IT</p>`;
+  const recipients = ["i.boultame@mars-marketing.fr","i.brai@mars-marketing.fr"]; 
   try {
-    await transporter.verify();
-
-    const to = "i.boultame@mars-marketing.fr, i.brai@mars-marketing.fr"; // Destinataires IT
-    const subject = "Demande de création d’adresse email pour un nouveau Téléacteur";
-    const emailBody = `Bonjour,\n\nMerci de bien vouloir créer une adresse email professionnelle pour le nouveau Téléacteur :\n\nPrénom Nom : ${prenom} ${nom}\nAdresse : ${prenom.toLowerCase()}.${nom.toLowerCase()}@mars-marketing.com\n\nMerci d’avance.\nService IT`;
-
-    await transporter.sendMail({
-      from: "iliesb58@gmail.com",
-      to,
-      subject,
-      text: emailBody
-    });
-    console.log('sendItRequestMail: email sent successfully');
+    await sendEmailUnified({ recipients, subject, html });
     return { success: true };
-  } catch (error) {
-    console.error('sendItRequestMail: error details:', error);
-    throw new HttpsError("internal", error.message || 'Erreur lors de l\'envoi de l\'email IT');
+  } catch (e) {
+    console.error('sendItRequestMail error', e);
+    throw new HttpsError('internal', e.message || 'Erreur envoi demande IT');
   }
 });
 
@@ -191,31 +205,26 @@ exports.sendSalesRecap = onCall({ region: "europe-west9" }, async (request) => {
   }
 
   try {
-    const today = new Date().toLocaleDateString("fr-FR", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
+    const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     const subject = `Récapitulatif Canal - ${today}`;
     const html = buildRecapHtml(salesData, contactsArgues, period, today);
-
-    // Envoyer l'email à tous les destinataires
-    await sendEmailToMultiple({
-      recipients,
-      subject,
-      html,
-    });
-
-    const recipientList = recipients.join(", ");
-    return {
-      success: true,
-      message: `Récapitulatif envoyé avec succès à : ${recipientList}`,
-    };
+    console.log('[sendSalesRecap] start', { recipients: recipients.length, htmlSize: html.length, subject });
+  const { provider, meta } = await sendEmailUnified({ recipients, subject, html });
+  console.log('[sendSalesRecap] done', { recipients: recipients.length, provider });
+  return { success: true, provider, meta, message: `Récapitulatif envoyé (${recipients.length} destinataires)` };
   } catch (error) {
-    console.error("Erreur lors de l'envoi de l'email:", error);
-    throw new HttpsError("internal", error.message);
+    console.error('[sendSalesRecap] error', error.status, error.snippet);
+    if (error.isAxiosError) {
+      const status = error.status;
+      if (status === 401 || status === 403) {
+        throw new HttpsError('failed-precondition', 'Clé / domaine Sweego non autorisé', { status, snippet: error.snippet });
+      }
+      if (status === 400) {
+        throw new HttpsError('invalid-argument', 'Payload refusé par Sweego', { status, snippet: error.snippet });
+      }
+      throw new HttpsError('internal', `Erreur Sweego (${status || '??'})`, { status, snippet: error.snippet });
+    }
+    throw new HttpsError('internal', error.message || 'Erreur envoi récapitulatif');
   }
 });
 
@@ -261,42 +270,27 @@ exports.sendWeeklyReport = onCall(
     }
 
     try {
-      const today = new Date().toLocaleDateString("fr-FR", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-
-      const monthName = new Date().toLocaleDateString("fr-FR", {
-        month: "long",
-        year: "numeric",
-      });
-
+      const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      const monthName = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
       const subject = `Rapport mensuel Canal+ - ${monthName}`;
-      const html = buildWeeklyReportHtml(
-        salesData,
-        contactsArguesData,
-        startDate,
-        endDate,
-        today
-      );
-
-      // Envoyer l'email à tous les destinataires
-      await sendEmailToMultiple({
-        recipients,
-        subject,
-        html,
-      });
-
-      const recipientList = recipients.join(", ");
-      return {
-        success: true,
-        message: `Rapport mensuel envoyé avec succès à : ${recipientList}`,
-      };
+      const html = buildWeeklyReportHtml(salesData, contactsArguesData, startDate, endDate, today);
+      console.log('[sendWeeklyReport] start', { recipients: recipients.length, htmlSize: html.length, subject });
+  const { provider, meta } = await sendEmailUnified({ recipients, subject, html });
+  console.log('[sendWeeklyReport] done', { recipients: recipients.length, provider });
+  return { success: true, provider, meta, message: `Rapport mensuel envoyé (${recipients.length} destinataires)` };
     } catch (error) {
-      console.error("Erreur lors de l'envoi du rapport mensuel:", error);
-      throw new HttpsError("internal", error.message);
+      console.error('[sendWeeklyReport] error', error.status, error.snippet);
+      if (error.isAxiosError) {
+        const status = error.status;
+        if (status === 401 || status === 403) {
+          throw new HttpsError('failed-precondition', 'Clé / domaine Sweego non autorisé', { status, snippet: error.snippet });
+        }
+        if (status === 400) {
+          throw new HttpsError('invalid-argument', 'Payload refusé par Sweego', { status, snippet: error.snippet });
+        }
+        throw new HttpsError('internal', `Erreur Sweego (${status || '??'})`, { status, snippet: error.snippet });
+      }
+      throw new HttpsError('internal', error.message || 'Erreur envoi rapport mensuel');
     }
   }
 );
@@ -722,16 +716,20 @@ function buildWeeklyReportHtml(
 }
 
 async function sendEmail({ to, subject, html }) {
-  const apiKey = "a45f8694-7c57-4d66-987d-f495f9bcffa4";
+  const functions = require('firebase-functions');
+  const cfg = functions.config ? functions.config() : {};
+  const apiKey = process.env.SWEEGO_API_KEY || cfg.sweego?.apikey || cfg.sweego?.api_key; // priorité apikey
+  if (!apiKey) {
+    throw new Error('SWEEGO_API_KEY manquante (config sweego.api_key ou sweego.apikey)');
+  }
+  const fromEmail = process.env.SWEEGO_SENDER || cfg.sweego?.sender || 'no-reply@cactus-tech.fr';
+  const fromName = process.env.SWEEGO_SENDER_NAME || cfg.sweego?.sender_name || 'Cactus-Tech';
 
   const data = {
     channel: "email",
     provider: "sweego",
     recipients: [{ email: to }],
-    from: {
-      email: "no-reply@cactus-tech.fr",
-      name: "Cactus-Tech",
-    },
+    from: { email: fromEmail, name: fromName },
     subject,
     "message-html": html,
   };
@@ -743,19 +741,33 @@ async function sendEmail({ to, subject, html }) {
         Accept: "application/json",
         "Api-Key": apiKey,
       },
+      timeout: 10000,
     });
     console.log(`✅ Email envoyé à ${to}:`, response.data);
   } catch (err) {
-    console.error(
-      `❌ Échec envoi email à ${to}:`,
-      err.response?.data || err.message
-    );
-    throw err;
+    const status = err.response?.status;
+    const body = err.response?.data;
+    let snippet = typeof body === 'string' ? body.slice(0, 300) : JSON.stringify(body || {}).slice(0, 300);
+    console.error(`❌ Échec envoi email à ${to} (status=${status}):`, snippet);
+    // enrichir l'erreur
+    const enriched = new Error(err.message || 'Erreur Sweego');
+    enriched.status = status;
+    enriched.snippet = snippet;
+    enriched.isAxiosError = true;
+    enriched.raw = body;
+    throw enriched;
   }
 }
 
 async function sendEmailToMultiple({ recipients, subject, html }) {
-  const apiKey = "a45f8694-7c57-4d66-987d-f495f9bcffa4";
+  const functions = require('firebase-functions');
+  const cfg = functions.config ? functions.config() : {};
+  const apiKey = process.env.SWEEGO_API_KEY || cfg.sweego?.apikey || cfg.sweego?.api_key; // priorité apikey
+  if (!apiKey) {
+    throw new Error('SWEEGO_API_KEY manquante (config sweego.api_key ou sweego.apikey)');
+  }
+  const fromEmail = process.env.SWEEGO_SENDER || cfg.sweego?.sender || 'no-reply@cactus-tech.fr';
+  const fromName = process.env.SWEEGO_SENDER_NAME || cfg.sweego?.sender_name || 'Cactus-Tech';
 
   // Valider les adresses email
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -771,10 +783,7 @@ async function sendEmailToMultiple({ recipients, subject, html }) {
     channel: "email",
     provider: "sweego",
     recipients: recipientList,
-    from: {
-      email: "no-reply@cactus-tech.fr",
-      name: "Cactus-Tech",
-    },
+    from: { email: fromEmail, name: fromName },
     subject,
     "message-html": html,
   };
@@ -786,16 +795,92 @@ async function sendEmailToMultiple({ recipients, subject, html }) {
         Accept: "application/json",
         "Api-Key": apiKey,
       },
+      timeout: 10000,
     });
-    console.log(`✅ Email envoyé à ${recipients.join(", ")}:`, response.data);
+    console.log(`✅ Email multi envoyé (${recipients.length} dest): status=${response.status}`);
     return response.data;
   } catch (err) {
-    console.error(
-      `❌ Échec envoi email à ${recipients.join(", ")}:`,
-      err.response?.data || err.message
-    );
+    const status = err.response?.status;
+    const body = err.response?.data;
+    let snippet = typeof body === 'string' ? body.slice(0,300) : JSON.stringify(body || {}).slice(0,300);
+    console.error(`❌ Échec multi (status=${status}) dest=${recipients.join(', ')} :: ${snippet}`);
+    const enriched = new Error(err.message || 'Erreur Sweego multi');
+    enriched.status = status;
+    enriched.snippet = snippet;
+    enriched.isAxiosError = true;
+    enriched.raw = body;
+    throw enriched;
+  }
+}
+
+// --- Unified provider helper (Sweego -> Resend fallback) ---
+async function sendEmailUnified({ recipients, subject, html }) {
+  const functions = require('firebase-functions');
+  const cfg = functions.config ? functions.config() : {};
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const invalid = recipients.filter(r => !emailRegex.test(r));
+  if (invalid.length) {
+    const err = new Error('Emails invalides: ' + invalid.join(', '));
+    err.code = 'EMAIL_VALIDATION';
     throw err;
   }
+  const fromEmail = process.env.SWEEGO_SENDER || cfg.sweego?.sender || process.env.RESEND_SENDER || cfg.resend?.sender || 'no-reply@cactus-tech.fr';
+  const fromName = process.env.SWEEGO_SENDER_NAME || cfg.sweego?.sender_name || process.env.RESEND_SENDER_NAME || cfg.resend?.sender_name || 'Cactus-Tech';
+
+  const attempts = [];
+
+  // Provider 1: Sweego (multi)
+  const sweegoKey = process.env.SWEEGO_API_KEY || cfg.sweego?.apikey || cfg.sweego?.api_key;
+  if (sweegoKey) {
+    try {
+      await sendEmailToMultiple({ recipients, subject, html });
+      return { provider: 'sweego', meta: { fromEmail, attempts } };
+    } catch (e) {
+      attempts.push({ provider: 'sweego', status: e.status, snippet: e.snippet });
+      console.warn('[emailUnified] Sweego failed, fallback to Resend', e.status, e.snippet);
+    }
+  } else {
+    attempts.push({ provider: 'sweego', skipped: true });
+  }
+
+  // Provider 2: Resend
+  const resendKey = process.env.RESEND_API_KEY || cfg.resend?.api_key || cfg.resend?.apikey;
+  if (resendKey) {
+    try {
+      const payload = {
+        from: `${fromName} <${fromEmail}>`,
+        to: recipients,
+        subject,
+        html,
+      };
+      const resp = await axios.post('https://api.resend.com/emails', payload, {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
+        timeout: 10000,
+      });
+      console.log('[emailUnified] Resend success', { count: recipients.length });
+      return { provider: 'resend', meta: { id: resp.data?.id, attempts } };
+    } catch (e) {
+      const status = e.response?.status;
+      const body = e.response?.data;
+      const snippet = typeof body === 'string' ? body.slice(0,300) : JSON.stringify(body || {}).slice(0,300);
+      attempts.push({ provider: 'resend', status, snippet });
+      const err = new Error('Echec Resend');
+      err.code = 'EMAIL_SEND_FAILED';
+      err.status = status;
+      err.snippet = snippet;
+      err.providerTried = 'resend';
+      err.attempts = attempts;
+      throw err;
+    }
+  } else {
+    attempts.push({ provider: 'resend', skipped: true });
+  }
+
+  const finalErr = new Error('Aucun provider n\'a pu envoyer l\'email');
+  finalErr.code = 'EMAIL_SEND_FAILED';
+  finalErr.providerTried = 'none';
+  finalErr.attempts = attempts;
+  throw finalErr;
 }
 
 // Fonction pour supprimer un utilisateur

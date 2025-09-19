@@ -33,37 +33,37 @@ const AdminDashboard: React.FC = () => {
       id: "contacts-argues",
       title: "Contacts argumentés & Taux de concrétisation",
       component: "ContactsArguesModule",
-      position: 1,
+      position: 2,
     },
     {
       id: "interactive-chart",
       title: "Graphique interactif",
       component: "InteractiveChartModule",
-      position: 2,
+      position: 3,
     },
     {
       id: "recent-sales",
       title: "Dernières ventes du jour",
       component: "RecentSalesModule",
-      position: 3,
+      position: 4,
     },
     {
       id: "top-sellers",
       title: "Top vendeurs",
       component: "TopSellersModule",
-      position: 4,
-    },
+      position: 5,
+    }, 
   ]);
 
   useEffect(() => {
     setLoading(true);
     setError("");
-    salesService.getSalesWithConsent()
+    salesService.getSalesWithStatus("valide")
       .then((sales) => {
         setSales(sales);
         setLoading(false);
       })
-      .catch((err) => {
+      .catch(() => {
         setError("Erreur lors du chargement des ventes");
         setLoading(false);
       });
