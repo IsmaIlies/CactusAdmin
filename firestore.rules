@@ -59,8 +59,8 @@ service cloud.firestore {
     
     // Règles pour la collection objectives
     match /objectives/{objectiveId} {
-      // Seuls les utilisateurs avec rôle admin, direction ou superviseur peuvent lire/créer/modifier (mais pas supprimer)
-      allow read, create, update: if hasAdminRole();
+      // Admin/direction/superviseur: lecture, création, mise à jour et suppression
+      allow read, create, update, delete: if hasAdminRole();
     }
     
     
