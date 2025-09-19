@@ -87,7 +87,7 @@ const AdminDashboard: React.FC = () => {
   // Calcul des statistiques via le service (pour compatibilité avec les anciens composants)
   // Utilise les ventes validées + validées soft pour les compteurs Ventes & Objectifs
   const salesStats = salesService.getSalesStats(combinedValidatedSales.length ? combinedValidatedSales : sales);
-  const sellers = salesService.getSellers(sales);
+  const sellers = salesService.getSellers(combinedValidatedSales.length ? combinedValidatedSales : sales);
 
   // Filtrer les sales qui ont un userId pour les modules
   const salesWithUserId = sales.filter(
@@ -134,9 +134,9 @@ const AdminDashboard: React.FC = () => {
           />
         );
       case "RecentSalesModule":
-        return <RecentSalesModule sales={salesWithUserId} offers={OFFERS} />;
+        return <RecentSalesModule sales={(combinedValidatedSales.length ? combinedValidatedSales : sales).filter((s): s is Sale & { userId: string } => !!s.userId)} offers={OFFERS} />;
       case "TopSellersModule":
-        return <TopSellersModule sales={salesWithUserId} />;
+        return <TopSellersModule sales={(combinedValidatedSales.length ? combinedValidatedSales : sales).filter((s): s is Sale & { userId: string } => !!s.userId)} />;
       default:
         return <div>Module non trouvé</div>;
     }
