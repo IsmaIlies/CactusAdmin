@@ -1051,28 +1051,79 @@ const RecapsHistorySection: React.FC = () => {
   }, []);
 
   const toCsv = (r: RecapEntry) => {
-    const escape = (s:string) => '"' + (s || '').split('"').join('""') + '"';
+    // Utiliser un séparateur « ; » pour une meilleure compatibilité avec Excel FR
+    const SEP = ';';
+    const EOL = '\r\n'; // Favorise l'ouverture dans Excel sous Windows
+    const escapeCSV = (value: string | number | undefined | null) => {
+      const s = (value === undefined || value === null) ? '' : String(value);
+      // Doubler les guillemets, entourer de quotes
+      return '"' + s.replace(/"/g, '""') + '"';
+    };
+
+    // Mise en forme des dates lisibles
+    const created = r.createdAt?.toDate ? r.createdAt.toDate() : undefined;
+    const dateStr = r.id; // yyyy-mm-dd
+    const timeStr = created ? created.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+    // Concat utilitaire pour ligne CSV
+    const row = (...cols: Array<string | number | undefined | null>) => cols.map(escapeCSV).join(SEP);
+
     const lines: string[] = [];
-    lines.push(['Date','Sujet','Destinataires','CC','Encadrants','Ventes confirmées','Mails envoyés','Absence','Congés','Retard','Sanction','Démission','Présents','Absents','Non marqués','Ventes du jour total'].map(escape).join(','));
-    lines.push([
-      r.id,
-      r.subject,
-      r.recipients.join('; '),
-      (r.ccRecipients || []).join('; '),
-      r.encadrants.join('; '),
-      String(r.metrics.salesConfirmed),
-      String(r.metrics.mailsSent),
-      String(r.metrics.absence),
-      String(r.metrics.conges),
-      String(r.metrics.retard),
-      String(r.metrics.sanction),
-      String(r.metrics.demission),
-      r.presence.present.join('; '),
-      r.presence.absent.join('; '),
-      r.presence.unmarked.join('; '),
-      String(r.metrics.totalSalesOfDay)
-    ].map(escape).join(','));
-    return lines.join('\n');
+
+    // Section 1: Informations générales
+    lines.push('Informations générales');
+    lines.push(row('Clé','Valeur'));
+    lines.push(row('Date', dateStr));
+    if (timeStr) lines.push(row('Heure', timeStr));
+    lines.push(row('Sujet', r.subject));
+    lines.push(row('Destinataires', r.recipients.join(' | ')));
+    lines.push(row('CC', (r.ccRecipients || []).join(' | ')));
+    lines.push(row('Encadrants', r.encadrants.join(' | ')));
+
+    // Ligne vide
+    lines.push('');
+
+    // Section 2: Indicateurs
+    lines.push('Indicateurs');
+    lines.push(row('Indicateur','Valeur'));
+    lines.push(row('Ventes confirmées', r.metrics.salesConfirmed));
+    lines.push(row('Ventes du jour (total)', r.metrics.totalSalesOfDay));
+    lines.push(row('Mails envoyés', r.metrics.mailsSent));
+    lines.push(row('Absence', r.metrics.absence));
+    lines.push(row('Congés', r.metrics.conges));
+    lines.push(row('Retard', r.metrics.retard));
+    lines.push(row('Sanction', r.metrics.sanction));
+    lines.push(row('Démission', r.metrics.demission));
+    lines.push(row('Présents (compte)', r.metrics.presentCount));
+    lines.push(row('Absents (compte)', r.metrics.absentCount));
+    lines.push(row('Non marqués (compte)', r.metrics.unmarkedCount));
+
+    // Ligne vide
+    lines.push('');
+
+    // Section 3: Présence
+    lines.push('Présence');
+    lines.push(row('Statut','Noms'));
+    lines.push(row('Présents', r.presence.present.join(' | ')));
+    lines.push(row('Absents', r.presence.absent.join(' | ')));
+    lines.push(row('Non marqués', r.presence.unmarked.join(' | ')));
+
+    // Ligne vide
+    lines.push('');
+
+    // Section 4: Ventes par vendeur
+    if (r.salesBySeller && r.salesBySeller.length) {
+      lines.push('Ventes par vendeur');
+      lines.push(row('Vendeur','Ventes'));
+      // Trier par nombre décroissant pour lisibilité
+      [...r.salesBySeller]
+        .sort((a,b)=> b.count - a.count)
+        .forEach(s => lines.push(row(s.name, s.count)));
+    }
+
+    // Joindre en ajoutant un BOM pour que Excel reconnaisse l'UTF-8
+    const content = lines.join(EOL);
+    return '\uFEFF' + content;
   };
 
   const downloadCsv = (r: RecapEntry) => {

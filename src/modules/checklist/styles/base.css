@@ -1,0 +1,158 @@
+/* Agrandir le select de l'opération dans l'admin */
+.select--operation {
+	min-width: 320px;
+	width: 100%;
+	max-width: 600px;
+	padding-left: 24px;
+	padding-right: 24px;
+	font-size: 18px;
+	height: 38px;
+	box-sizing: border-box;
+	display: block;
+}
+/* Force le blanc sur le total d'heures dans les archives */
+.archives-total-white { color: #fff !important; font-weight: 600; }
+/* Force le blanc sur la div archive-hours-right même si section-subtitle est présent */
+.cactus-hours-theme .section-subtitle.archive-hours-right { color: #fff !important; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+.cactus-hours-theme{--color-bg:#0b261a;--color-bg-2:#0e2f21;--color-surface:#113f28;--color-surface-2:#0f3824;--color-border:#195d3b;--color-text:#f5fdf8;--color-text-secondary:#c7e6d6;--color-accent:#1ecf88;--accent-2:#12c690;--brand-glow:#1ecf88;--radius:12px;--gap:16px;font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.cactus-hours-theme .page-shell{padding:24px 24px;display:flex;flex-direction:column;gap:var(--gap);background:radial-gradient(1200px 600px at -10% -20%, rgba(30,173,121,.25), transparent 60%),linear-gradient(180deg, var(--color-bg), var(--color-bg-2));min-height:100%;border-radius:16px}
+.cactus-hours-theme .page-header{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.cactus-hours-theme .page-title{margin:0;font-size:36px;letter-spacing:.2px;color:var(--color-text)}
+.cactus-hours-theme .section-subtitle{font-size:12.5px;color:var(--color-text-secondary)}
+.cactus-hours-theme .status-line{display:flex;gap:10px;align-items:center;color:var(--color-text-secondary)}
+.cactus-hours-theme .toolbar{display:flex;gap:10px;align-items:center}
+.cactus-hours-theme .input,.cactus-hours-theme .select,.cactus-hours-theme .textarea{background:rgba(17,63,40,.65);backdrop-filter:blur(3px);color:var(--color-text);border:1px solid var(--color-border);border-radius:12px;padding:12px 14px}
+.cactus-hours-theme .input--time{width:110px}
+.cactus-hours-theme .button{background:var(--color-accent);color:#052215;border:none;border-radius:999px;padding:10px 16px;cursor:pointer;font-weight:700}
+.cactus-hours-theme .button--ghost{background:transparent;border:1px solid var(--color-border);color:var(--color-text)}
+.cactus-hours-theme .button--secondary{background:#0b8a63}
+.cactus-hours-theme .button--danger{background:#e35363}
+.cactus-hours-theme .alert{background:rgba(227,83,99,.12);border:1px solid #e35363;color:#fff;border-radius:12px;padding:14px}
+.cactus-hours-theme .card{background:linear-gradient(180deg, rgba(17,63,40,.6), rgba(17,63,40,.45));border:1px solid var(--color-border);border-radius:16px;padding:18px}
+.cactus-hours-theme .table-container{background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:var(--radius)}
+.cactus-hours-theme .table-scroll{overflow:auto;border-radius:var(--radius)}
+.cactus-hours-theme table{width:100%;border-collapse:collapse}
+.cactus-hours-theme th,.cactus-hours-theme td{border-bottom:1px solid var(--color-border);padding:10px;text-align:left;color:var(--color-text)}
+.cactus-hours-theme th{position:sticky;top:0;background:linear-gradient(180deg, rgba(17,69,43,.95), rgba(17,69,43,.8));z-index:1}
+.cactus-hours-theme .table-container--elevated{padding:20px;border-radius:22px;background:linear-gradient(180deg, rgba(17,63,40,.75), rgba(17,63,40,.55));border:1px solid rgba(30,207,136,.18);box-shadow:0 18px 38px rgba(0,0,0,.25)}
+.cactus-hours-theme .table-container--elevated .table-scroll{padding:6px} 
+.cactus-hours-theme .table-container--elevated table{border-collapse:separate;border-spacing:0;background:rgba(10,41,27,.6);border-radius:18px;overflow:hidden} 
+.cactus-hours-theme .table-container--elevated thead th{text-transform:uppercase;letter-spacing:.08em;font-size:11px;color:#d7f6e6;background:rgba(12,52,32,.95);border-bottom:1px solid rgba(30,207,136,.25)} 
+.cactus-hours-theme .table-container--elevated tbody tr{border-bottom:1px solid rgba(25,93,59,.6);transition:background .2s ease,transform .2s ease,box-shadow .2s ease} 
+.cactus-hours-theme .table-container--elevated tbody tr:nth-child(even){background:rgba(17,63,40,.5)} 
+.cactus-hours-theme .table-container--elevated tbody tr:nth-child(odd){background:rgba(17,63,40,.4)} 
+.cactus-hours-theme .table-container--elevated tbody tr:hover{background:rgba(19,84,55,.75);transform:translateY(-1px);box-shadow:0 10px 24px rgba(0,0,0,.25)} 
+.cactus-hours-theme .table-day{position:relative;display:flex;align-items:center;gap:12px;padding-left:16px} 
+.cactus-hours-theme .table-day::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:6px;height:36px;border-radius:999px;background:linear-gradient(180deg,var(--color-accent),rgba(30,207,136,.2))} 
+.cactus-hours-theme .table-day__chip{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;background:rgba(30,207,136,.18);color:#dcfff1;border:1px solid rgba(30,207,136,.35)} 
+.cactus-hours-theme .table-day__date{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:rgba(215,246,230,.65)} 
+.cactus-hours-theme .session-cell{min-width:180px} 
+.cactus-hours-theme .session-chip{display:inline-flex;align-items:center;justify-content:center;padding:6px 12px;border-radius:12px;font-weight:600;letter-spacing:.03em;border:1px solid rgba(255,255,255,.18);background:rgba(22,73,46,.6);color:var(--color-text)} 
+.cactus-hours-theme .session-chip--morning{border-color:rgba(30,207,136,.45);background:rgba(30,207,136,.18);color:#c1ffe7} 
+.cactus-hours-theme .session-chip--afternoon{border-color:rgba(71,169,255,.4);background:rgba(71,169,255,.16);color:#d5ecff} 
+.cactus-hours-theme .session-chip--empty{border-style:dashed;border-color:rgba(255,255,255,.25);background:transparent;color:rgba(255,255,255,.5)} 
+.cactus-hours-theme .archives-total-chip{display:inline-flex;align-items:center;justify-content:center;min-width:76px;padding:6px 12px;border-radius:12px;background:linear-gradient(90deg, rgba(30,207,136,.32), rgba(30,207,136,.12));font-weight:700;letter-spacing:.04em;color:#f5fff9;box-shadow:0 0 0 1px rgba(30,207,136,.18) inset} 
+.cactus-hours-theme .dispute-chip{display:flex;flex-direction:column;gap:4px;padding:8px 12px;border-radius:12px;border:1px solid rgba(227,83,99,.45);background:rgba(227,83,99,.12);color:#ffe9ec} 
+.cactus-hours-theme .dispute-chip__label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#f8b4c6} 
+.cactus-hours-theme .dispute-chip__text{font-size:13px;line-height:1.25} 
+.cactus-hours-theme .muted{color:rgba(255,255,255,.35);font-size:13px} 
+.cactus-hours-theme .status-tag{display:inline-flex;align-items:center;justify-content:center;min-width:110px;padding:6px 14px;border-radius:999px;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;border:1px solid transparent} 
+.cactus-hours-theme .status-tag--approved{background:rgba(30,207,136,.18);border-color:rgba(30,207,136,.4);color:#c1ffe8} 
+.cactus-hours-theme .status-tag--pending{background:rgba(234,179,8,.12);border-color:rgba(234,179,8,.4);color:#fde68a} 
+.cactus-hours-theme .status-tag--rejected{background:rgba(227,83,99,.14);border-color:rgba(227,83,99,.42);color:#fda4af}
+
+.cactus-hours-theme .time-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cactus-hours-theme .operation-cell{min-width:200px}
+.cactus-hours-theme .table-actions{display:flex;gap:10px}
+.cactus-hours-theme .badge{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:999px;color:#052215;font-weight:700;background:#0ea5a0;box-shadow:0 0 0 1px rgba(0,0,0,.1) inset}
+.cactus-hours-theme .badge--small{font-size:12px;padding:2px 8px;text-transform:uppercase;letter-spacing:.4px}
+.cactus-hours-theme .total-highlight{font-weight:800;font-size:28px;letter-spacing:.3px;color:var(--color-accent)}
+
+/* Brand title/subtitle styles */
+.cactus-hours-theme .brand-title{font-weight:800;font-size:24px;letter-spacing:0.8px;text-transform:uppercase;background:linear-gradient(90deg, var(--brand-glow), var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.cactus-hours-theme .brand-subtitle{font-size:12px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.8px}
+
+/* Utility */
+.cactus-hours-theme .accent-text{color:var(--color-accent);font-weight:800}
+
+/* Archives styles */
+.cactus-hours-theme .archive-wrap{border:1px solid var(--color-border);border-radius:20px;padding:18px;background:linear-gradient(180deg, rgba(17,63,40,.6), rgba(17,63,40,.45))}
+.cactus-hours-theme .archive-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}
+.cactus-hours-theme .archive-day{border:1px solid var(--color-border);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.cactus-hours-theme .archive-entry{border:1px dashed rgba(25,93,59,.5);border-radius:14px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cactus-hours-theme .archive-entry-col{display:flex;flex-direction:column;gap:4px}
+.cactus-hours-theme .icon-badge{width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--color-border);color:var(--color-text-secondary);font-weight:800}
+/* Dispute confirmation line */
+.cactus-hours-theme .dispute-line{ color:#ffd166; font-weight:600; margin-top:6px }
+
+/* Date chip under the day input */
+.cactus-hours-theme .date-chip{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;border-radius:999px;background:linear-gradient(90deg, rgba(30,207,136,.16), rgba(18,198,144,.14));color:var(--color-accent);font-weight:800;letter-spacing:.6px;text-transform:uppercase}
+.cactus-hours-theme .date-chip--muted{opacity:.9}
+
+/* Top tabs */
+.cactus-hours-theme .top-tabs{display:flex;gap:8px}
+.cactus-hours-theme .top-tab{padding:6px 12px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:var(--color-text-secondary);font-weight:600;cursor:pointer}
+.cactus-hours-theme .top-tab--active{background:var(--color-accent);color:#052215;border-color:transparent}
+
+/* Enhanced text styles */
+.cactus-hours-theme .date-label{ text-transform:uppercase; letter-spacing:.6px; color:var(--color-text-secondary); font-weight:800 }
+.cactus-hours-theme .project-badge{ display:inline-flex; align-items:center; gap:8px; padding:4px 10px; border-radius:999px; border:1px solid var(--color-border); background:linear-gradient(90deg, rgba(30,207,136,.15), rgba(18,198,144,.12)); color:var(--color-text); font-weight:800 }
+.cactus-hours-theme .hint-card{ display:flex; align-items:center; gap:10px; background:linear-gradient(180deg, rgba(17,63,40,.45), rgba(17,63,40,.32)); border:1px dashed rgba(25,93,59,.55); color:var(--color-text-secondary) }
+
+/* Time highlight for early start like 7h00 */
+.cactus-hours-theme .time-early{ color:#fff; font-weight:800 }
+
+/* Modal */
+.cactus-hours-theme .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:50}
+.cactus-hours-theme .modal-card{width:min(560px, 92vw);background:linear-gradient(180deg, rgba(17,63,40,.9), rgba(17,63,40,.72));border:1px solid rgba(25,93,59,.7);border-radius:18px;padding:16px 18px;box-shadow:0 10px 34px rgba(0,0,0,.45)}
+.cactus-hours-theme .modal-title{margin:0 0 10px 0;font-size:18px;color:var(--color-text)}
+.cactus-hours-theme .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+
+/* Textarea elevated look for modal */
+.cactus-hours-theme .textarea--elevated{ background:rgba(17,63,40,.75); border:1px solid rgba(25,93,59,.7); box-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 1px 0 rgba(0,0,0,.25); border-radius:12px; color:var(--color-text) }
+
+/* Stronger primary button for modal submit */
+.cactus-hours-theme .button.button--primary-strong{ background:linear-gradient(180deg, #25d08a, #18b679); color:#052215; border:none; box-shadow: 0 6px 18px rgba(30,207,136,.25) }
+
+/* ============================= */
+/* Admin view enhancements       */
+/* ============================= */
+.cactus-hours-theme .admin-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;background:linear-gradient(180deg, rgba(17,63,40,.6), rgba(17,63,40,.45));border:1px solid var(--color-border);border-radius:16px;padding:18px}
+.cactus-hours-theme .admin-hero .page-title{font-size:28px}
+.cactus-hours-theme .hero-subtitle{display:inline-block;margin-top:6px;padding:4px 10px;border-radius:999px;background:linear-gradient(90deg, rgba(30,207,136,.16), rgba(18,198,144,.14));color:var(--color-accent);font-weight:800;letter-spacing:.6px}
+.cactus-hours-theme .admin-hero__controls{display:flex;align-items:flex-end;gap:12px}
+.cactus-hours-theme .admin-hero__inputs{display:flex;gap:10px}
+.cactus-hours-theme .input--hero,.cactus-hours-theme .select--hero{padding:10px 12px;border-radius:12px}
+
+.cactus-hours-theme .admin-summary-card{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:0;align-items:center;background:linear-gradient(180deg, rgba(17,63,40,.6), rgba(17,63,40,.45));border:1px solid var(--color-border);border-radius:16px;padding:14px 16px}
+.cactus-hours-theme .admin-summary-card__col{display:flex;flex-direction:column;gap:6px}
+.cactus-hours-theme .admin-summary-card__label{font-size:12px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.6px}
+.cactus-hours-theme .admin-summary-card__value{font-weight:700}
+.cactus-hours-theme .admin-summary-card__value--period{color:#ffd166; font-weight:800}
+.cactus-hours-theme .admin-summary-card__metric{font-weight:800;font-size:20px;color:var(--color-accent)}
+.cactus-hours-theme .admin-summary-card__badge{margin-top:4px;display:inline-flex;align-items:center;gap:8px;padding:4px 10px;border-radius:999px;border:1px solid var(--color-border);background:linear-gradient(90deg, rgba(30,207,136,.15), rgba(18,198,144,.12));font-size:12px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.6px}
+.cactus-hours-theme .admin-summary-card__divider{height:36px;width:1px;background:var(--color-border)}
+
+.cactus-hours-theme .admin-action-bar{display:flex;gap:10px;flex-wrap:wrap}
+.cactus-hours-theme .button--pill{border-radius:999px;padding:8px 14px}
+
+.cactus-hours-theme .admin-view-toggle{display:inline-flex;background:rgba(17,63,40,.65);border:1px solid var(--color-border);border-radius:999px;overflow:hidden}
+.cactus-hours-theme .button--segmented{background:transparent;border:none;color:var(--color-text-secondary);padding:8px 12px}
+.cactus-hours-theme .button--segmented-active{background:var(--color-accent);color:#052215}
+
+.cactus-hours-theme .admin-insight-card{margin-top:4px;border:1px dashed rgba(25,93,59,.55);border-radius:14px;padding:10px 12px;color:var(--color-text-secondary);background:linear-gradient(180deg, rgba(17,63,40,.45), rgba(17,63,40,.32))}
+
+.cactus-hours-theme .table-container--elevated{box-shadow:0 12px 28px rgba(0,0,0,.22)}
+.cactus-hours-theme table tbody tr{transition:background .15s ease}
+.cactus-hours-theme table tbody tr:hover{background:rgba(17,63,40,.35)}
+.cactus-hours-theme .project-pill{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;border-radius:999px;border:1px solid var(--color-border);background:linear-gradient(90deg, rgba(30,207,136,.15), rgba(18,198,144,.12));font-weight:800}
+
+.cactus-hours-theme .admin-summary-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(180deg, rgba(17,63,40,.6), rgba(17,63,40,.45));border:1px solid var(--color-border);border-radius:16px;padding:12px 14px}
+.cactus-hours-theme .admin-summary-footer h3{margin:0}
+.cactus-hours-theme .admin-summary-footer__status{display:flex;align-items:center;gap:14px}
+.cactus-hours-theme .summary-footer-label{font-size:12px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.6px}
+.cactus-hours-theme .summary-footer-value{font-weight:800;font-size:18px;color:var(--color-accent)}
+
+/* Empty state */
+.cactus-hours-theme .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;border:1px dashed rgba(25,93,59,.55);border-radius:16px;background:linear-gradient(180deg, rgba(17,63,40,.45), rgba(17,63,40,.32));color:var(--color-text-secondary)}

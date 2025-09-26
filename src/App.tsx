@@ -16,6 +16,8 @@ import LeadsDashboardPage from "./pages/LeadsDashboardPage";
 import ImportCsvPage from "./pages/ImportCsvPage";
 import PresenceTAPage from "./pages/PresenceTAPage";
 import NouveautesPage from "./pages/NouveautesPage";
+import ChecklistAdminShell from "./pages/ChecklistAdminShell";
+import ChecklistArchivesShell from "./pages/ChecklistArchivesShell";
 
 function App() {
   return (
@@ -63,6 +65,23 @@ function App() {
           <Route path="/dashboard/leads" element={<LeadsDashboardPage />} />
             <Route path="/dashboard/import-csv" element={<ImportCsvPage />} />
           <Route path="/dashboard/nouveautes" element={<NouveautesPage />} />
+          <Route
+            path="/dashboard/checklist-admin"
+            element={
+              <AdminProtection requiredRole="superviseur">
+                <ChecklistAdminShell />
+              </AdminProtection>
+            }
+          />
+          <Route
+            path="/dashboard/checklist-archives"
+            element={
+              <AdminProtection requiredRole="superviseur">
+                <ChecklistArchivesShell />
+              </AdminProtection>
+            }
+          />
+          
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </MissionProvider>

@@ -74,7 +74,6 @@ export interface SalesStats {
 // L'interface PeriodOptions a été supprimée car elle n'est plus utilisée
 
 class SalesService {
-  private salesCollection = collection(db, "sales");
 
   /**
    * Normalise un statut de commande vers une valeur attendue par l'appli
@@ -922,27 +921,22 @@ class SalesService {
         return 0;
       }
 
-      const firestoreStartDate = Timestamp.fromDate(startDate);
-      const firestoreEndDate = Timestamp.fromDate(new Date(endDate.setHours(23, 59, 59, 999)));
-      // Requête Firestore : filtrage uniquement par date
-      const q = query(
-        this.salesCollection,
-        where("date", ">=", firestoreStartDate),
-        where("date", "<=", firestoreEndDate)
-      );
+      // Chargement de toutes les ventes pour gérer les documents où "date" peut être string ou Timestamp
+      const allSales = await this.getAllSales();
+      // Normaliser borne de fin à 23:59:59.999
+      const endBound = new Date(endDate);
+      endBound.setHours(23, 59, 59, 999);
 
-      const snapshot = await getDocs(q);
-      let countWithStatus = 0;
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        // Normaliser le statut afin de couvrir les variantes et inclure validation_soft
-        const normalized = this.normalizeOrderStatus((data as any).orderStatus);
+      const countWithStatus = allSales.reduce((acc, sale) => {
+        const d = this.parseDate(sale.date);
+        if (!d) return acc;
+        if (d < startDate || d > endBound) return acc;
+        const normalized = this.normalizeOrderStatus((sale as any).orderStatus);
         const isCountable = normalized === "valide" || normalized === "validation_soft";
-        // Filtrage JS par userId si présent
-        if (isCountable && (!periodData.userId || data.userId === periodData.userId)) {
-          countWithStatus++;
-        }
-      });
+        if (!isCountable) return acc;
+        if (periodData.userId && sale.userId !== periodData.userId) return acc;
+        return acc + 1;
+      }, 0);
       return countWithStatus;
     } catch (error) {
       console.error("Erreur lors du comptage des ventes pour la période:", error);

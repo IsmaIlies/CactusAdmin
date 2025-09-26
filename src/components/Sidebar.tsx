@@ -142,21 +142,7 @@ const Sidebar: React.FC = () => {
           </NavLink>
         )}
 
-        {/* Lien externe vers Craiyon (visible uniquement pour les administrateurs) */}
-        {isAdmin() && (
-          <a
-            href="https://www.craiyon.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-start px-6 py-3 text-sm font-medium transition-colors text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-          >
-            <Image className="w-5 h-5 mr-3 mt-0.5" />
-            <div>
-              <div>Craiyon</div>
-              <div className="text-xs text-cactus-300">Générateur d’images gratuit et illimité via prompt</div>
-            </div>
-          </a>
-        )}
+        {/* Craiyon supprimé de la sidebar */}
 
         {/* Section Application visible pour admin/direction/superviseur */}
         {shouldShowMainNavigation() && (
@@ -297,6 +283,20 @@ const Sidebar: React.FC = () => {
             >
               <span className="mr-3" role="img" aria-label="mission">🗂️</span>
               Gestion Missions
+            </NavLink>
+
+            <NavLink
+              to="/dashboard/checklist-admin"
+              className={({ isActive }) =>
+                `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-cactus-700/70 text-white"
+                    : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                }`
+              }
+            >
+              <span className="mr-3" role="img" aria-label="heures">⏱️</span>
+              Checklist Heures (Admin)
             </NavLink>
           </React.Fragment>
         )}

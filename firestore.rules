@@ -8,6 +8,15 @@ service cloud.firestore {
               request.auth.token.superviseur == true);
     }
 
+    // Fonction pour autoriser certains emails spécifiques
+    function isAllowedEmail() {
+      return request.auth != null && (
+        request.auth.token.email == 'i.boultame@emiciv.fr' ||
+        request.auth.token.email == 'j.allione@emiciv.fr' ||
+        request.auth.token.email == 'i.brai@emiciv.fr'
+      );
+    }
+
     // Règles pour la collection users
     match /users/{userId} {
       allow read: if request.auth != null;
@@ -99,15 +108,22 @@ service cloud.firestore {
       // Écriture/maj/suppression pour admin/direction/superviseur
       allow create, update, delete: if hasAdminRole();
     }
+
+    // Règles pour les enregistrements d'heures (checklist)
+    match /hoursEntries/{docId} {
+      allow read: if request.auth != null;
+      // L'agent peut créer/modifier ses propres entrées
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || hasAdminRole()
+      );
+    }
     // Règles pour la collection news (Nouveautés)
     match /news/{docId} {
       // Tous les utilisateurs connectés peuvent lire
       allow read: if request.auth != null;
-      // Création/mise à jour/suppression réservées aux rôles avancés
-      allow create, update, delete: if request.auth != null &&
-        (request.auth.token.admin == true ||
-         request.auth.token.direction == true ||
-         request.auth.token.superviseur == true);
+      // Création/mise à jour/suppression réservées aux rôles avancés ou emails explicitement autorisés
+      allow create, update, delete: if hasAdminRole() || isAllowedEmail();
     }
   }
 }

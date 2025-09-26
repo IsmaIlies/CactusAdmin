@@ -1,15 +1,39 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Nouveautés PDFs
-    match /news/{allPaths=**} {
-      // Lecture pour tout utilisateur authentifié
+    function hasRole() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.direction == true ||
+        request.auth.token.superviseur == true
+      );
+    }
+
+    function isAllowedEmail() {
+      return request.auth != null && (
+        // Autorisations explicites par email
+        request.auth.token.email == 'i.boultame@emiciv.fr' ||
+        request.auth.token.email == 'j.allione@emiciv.fr' ||
+        request.auth.token.email == 'i.brai@emiciv.fr'
+      );
+    }
+
+    // Lecture pour tout utilisateur authentifié sur ces répertoires
+    // Ecriture réservée aux rôles avancés ou emails autorisés
+    match /news-pdf/{allPaths=**} {
       allow read: if request.auth != null;
-      // Ecriture réservée aux rôles avancés
-      allow write: if request.auth != null &&
-        (request.auth.token.admin == true ||
-         request.auth.token.direction == true ||
-         request.auth.token.superviseur == true);
+      allow write: if hasRole() || isAllowedEmail();
+    }
+
+    match /programme-pdf/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if hasRole() || isAllowedEmail();
+    }
+
+    // Compatibilité ancienne: certains objets peuvent encore être sous 'news/'
+    match /news/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if hasRole() || isAllowedEmail();
     }
 
     // Par défaut, rien d'autre n'est autorisé

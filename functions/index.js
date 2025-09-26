@@ -123,6 +123,71 @@ exports.listUsers = onCall({ region: "europe-west9" }, async (request) => {
   }
 });
 
+// Soumission d'heures depuis le site Agent (autre app)
+// Usage côté client (autre site) via Firebase Functions SDK:
+//   const submit = httpsCallable(functions, 'submitAgentHours');
+//   await submit({ day, includeMorning, includeAfternoon, morningStart, morningEnd, afternoonStart, afternoonEnd, project, notes, hasDispute });
+exports.submitAgentHours = onCall({ region: "europe-west9" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Utilisateur non authentifié");
+  }
+  const uid = request.auth.uid;
+  const data = request.data || {};
+
+  // Validation minimale
+  const required = [
+    "day",
+    "includeMorning",
+    "includeAfternoon",
+    "morningStart",
+    "morningEnd",
+    "afternoonStart",
+    "afternoonEnd",
+    "project",
+  ];
+  for (const k of required) {
+    if (typeof data[k] === "undefined") {
+      throw new HttpsError("invalid-argument", `Champ manquant: ${k}`);
+    }
+  }
+
+  const day = String(data.day);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    throw new HttpsError("invalid-argument", "Format de date attendu yyyy-mm-dd");
+  }
+
+  const period = day.slice(0, 7); // yyyy-MM
+
+  const entry = {
+    id: day,
+    period,
+    day,
+    includeMorning: !!data.includeMorning,
+    includeAfternoon: !!data.includeAfternoon,
+    morningStart: String(data.morningStart || ""),
+    morningEnd: String(data.morningEnd || ""),
+    afternoonStart: String(data.afternoonStart || ""),
+    afternoonEnd: String(data.afternoonEnd || ""),
+    project: String(data.project || "Autre"),
+    notes: data.notes ? String(data.notes) : undefined,
+    status: "submitted",
+    reviewStatus: "Pending",
+    hasDispute: !!data.hasDispute,
+    userId: uid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    const db = admin.firestore();
+    const deterministicId = `${uid}_${day}`;
+    await db.collection("hoursEntries").doc(deterministicId).set(entry, { merge: true });
+    return { success: true, id: deterministicId };
+  } catch (e) {
+    console.error("submitAgentHours error", e);
+    throw new HttpsError("internal", e.message || "Erreur enregistrement des heures");
+  }
+});
+
 // Fonction pour définir le rôle d'un utilisateur (admin seulement)
 exports.setUserRole = onCall({ region: "europe-west9" }, async (request) => {
   const { targetUserId, role } = request.data;
