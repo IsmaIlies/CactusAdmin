@@ -11,6 +11,14 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const { login, loginWithMicrosoft, user, refreshUserClaims } = useAuth();
   const navigate = useNavigate();
+  const [selectedUniverse, setSelectedUniverse] = useState<"canal" | "leads" | null>(null);
+
+  const handleUniverseSelection = (universe: "canal" | "leads") => {
+    setSelectedUniverse(universe);
+    if (user) {
+      navigate(universe === "leads" ? "/admin/leads" : "/admin/canal");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +28,13 @@ const LoginPage = () => {
     try {
       const success = await login(email, password);
       if (success) {
-        navigate("/dashboard");
+        if (selectedUniverse === "leads") {
+          navigate("/admin/leads");
+        } else if (selectedUniverse === "canal") {
+          navigate("/admin/canal");
+        } else {
+          navigate("/admin/canal");
+        }
       } else {
         setError("Identifiants invalides. Veuillez réessayer.");
       }
@@ -38,7 +52,13 @@ const LoginPage = () => {
     try {
       const success = await loginWithMicrosoft();
       if (success) {
-        navigate("/dashboard");
+        if (selectedUniverse === "leads") {
+          navigate("/admin/leads");
+        } else if (selectedUniverse === "canal") {
+          navigate("/admin/canal");
+        } else {
+          navigate("/admin/canal");
+        }
       } else {
         setError("Échec de la connexion avec Microsoft. Veuillez réessayer.");
       }
@@ -49,21 +69,57 @@ const LoginPage = () => {
     }
   };
 
+  const containerBackgroundClass =
+    selectedUniverse === "leads"
+      ? "bg-gradient-to-br from-[#001d66] via-[#0c3fbf] to-[#6ca8ff]"
+      : "bg-gradient-to-b from-cactus-600 to-cactus-800";
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-cactus-600 to-cactus-800">
+    <div
+      className={`min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-500 ${containerBackgroundClass}`}
+    >
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
           <h1 className="text-5xl font-bold text-white mb-2">Cactus</h1>
           <p className="text-cactus-100">
-            Plateforme d'assistance à la télévente
+            SaaS de pilotage de missions Orange
           </p>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-6 w-full">
+          <div className="mb-6">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => handleUniverseSelection("canal")}
+                className={`flex-1 rounded-lg bg-black py-4 text-center text-lg font-semibold text-white shadow transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black hover:bg-[#1a1a1a] ${
+                  selectedUniverse === "canal" ? "shadow-lg" : ""
+                }`}
+                aria-pressed={selectedUniverse === "canal"}
+              >
+                CANAL+
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUniverseSelection("leads")}
+                className={`flex-1 rounded-lg bg-[#FF7900] py-4 text-center text-lg font-semibold text-white shadow transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF7900] hover:bg-[#ff9740] ${
+                  selectedUniverse === "leads" ? "shadow-lg" : ""
+                }`}
+                aria-pressed={selectedUniverse === "leads"}
+              >
+                ORANGE LEADS
+              </button>
+            </div>
+            {selectedUniverse && (
+              <p className="mt-3 text-center text-sm font-medium text-[#002FA7]">
+                Univers sélectionné : {selectedUniverse === "canal" ? "Canal+" : "Orange Leads"}
+              </p>
+            )}
+          </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div
-                className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative\"
+                className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative"
                 role="alert"
               >
                 <span className="block sm:inline">{error}</span>
@@ -130,7 +186,11 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full btn-primary py-3 flex items-center justify-center"
+              className={`w-full btn-primary py-3 flex items-center justify-center transition-colors duration-300 ${
+                selectedUniverse === "leads"
+                  ? "bg-[#002FA7] hover:bg-[#1c45c4]"
+                  : ""
+              }`}
             >
               {loading ? "Connexion..." : "Se connecter"}
             </button>

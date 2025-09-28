@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   LogOut,
@@ -12,17 +12,29 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 const Sidebar: React.FC = () => {
   const { user, isAdmin, isDirection, isSuperviseur, logout } = useAuth();
+  const navigate = useNavigate();
   const [isCanalDropdownOpen, setIsCanalDropdownOpen] = useState(false);
   const [activeMission, setActiveMission] = useState("CANAL+");
 
   const switchMission = (missionName: string) => {
     setActiveMission(missionName);
+    if (missionName === "Leads") {
+      navigate("/admin/leads");
+    } else {
+      navigate("/admin/canal");
+    }
+    setIsCanalDropdownOpen(false);
   };
 
   const updateActiveMissionFromPath = () => {
-    if (window.location.pathname.startsWith("/dashboard/leads")) {
+    const { pathname } = window.location;
+    if (pathname.startsWith("/admin/leads")) {
       setActiveMission("Leads");
-    } else if (window.location.pathname.startsWith("/dashboard/canal")) {
+    } else if (pathname.startsWith("/dashboard/leads")) {
+      setActiveMission("Leads");
+    } else if (pathname.startsWith("/admin/canal")) {
+      setActiveMission("CANAL+");
+    } else if (pathname.startsWith("/dashboard")) {
       setActiveMission("CANAL+");
     }
   };
@@ -154,7 +166,7 @@ const Sidebar: React.FC = () => {
             </div>
 
             <NavLink
-              to={activeMission === "Leads" ? "/dashboard/leads" : "/dashboard/canal"}
+              to={activeMission === "Leads" ? "/admin/leads" : "/admin/canal"}
               end
               className={({ isActive }) =>
                 `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
@@ -187,7 +199,7 @@ const Sidebar: React.FC = () => {
               <React.Fragment>
                 {activeMission === "Leads" && (
                   <NavLink
-                    to="/dashboard/leads-sales"
+                    to="/admin/leads/sales"
                     className={({ isActive }) =>
                       `flex items-center px-6 py-3 text-sm font-medium transition-colors ${
                         isActive
