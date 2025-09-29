@@ -18,6 +18,10 @@ import PresenceTAPage from "./pages/PresenceTAPage";
 import NouveautesPage from "./pages/NouveautesPage";
 import ChecklistAdminShell from "./pages/ChecklistAdminShell";
 import ChecklistArchivesShell from "./pages/ChecklistArchivesShell";
+import AdminLeadsLayout from "./pages/admin/leads/AdminLeadsLayout";
+import AdminLeadsDashboardPage from "./pages/admin/leads/AdminLeadsDashboardPage";
+import AdminLeadsSalesPage from "./pages/admin/leads/AdminLeadsSalesPage";
+import AdminLeadsChecklistPage from "./pages/admin/leads/AdminLeadsChecklistPage";
 
 function App() {
   return (
@@ -63,7 +67,7 @@ function App() {
             }
           />
           <Route path="/dashboard/leads" element={<LeadsDashboardPage />} />
-            <Route path="/dashboard/import-csv" element={<ImportCsvPage />} />
+          <Route path="/dashboard/import-csv" element={<ImportCsvPage />} />
           <Route path="/dashboard/nouveautes" element={<NouveautesPage />} />
           <Route
             path="/dashboard/checklist-admin"
@@ -81,7 +85,27 @@ function App() {
               </AdminProtection>
             }
           />
-          
+          <Route
+            path="/admin/leads"
+            element={
+              <AdminProtection requiredRole="admin">
+                <AdminLeadsLayout />
+              </AdminProtection>
+            }
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<AdminLeadsDashboardPage />} />
+            <Route path="sales" element={<AdminLeadsSalesPage />} />
+            <Route path="checklist" element={<AdminLeadsChecklistPage />} />
+          </Route>
+          <Route
+            path="/admin/canal/*"
+            element={
+              <AdminProtection requiredRole="admin">
+                <DashboardPage />
+              </AdminProtection>
+            }
+          />
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </MissionProvider>

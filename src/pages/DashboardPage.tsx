@@ -12,24 +12,25 @@ import AdminUsersPage from "./AdminUsersPage";
 
 const DashboardPage = () => {
   const location = useLocation();
+  const normalizedPath = location.pathname.replace(/^\/admin\/canal/, "/dashboard");
   // const { debugUserRoles, refreshUserClaims } = useAuth(); // Commenté avec les boutons de debug
 
   // Détermine la page active à partir de l'URL
   let activePage = "home";
-  if (location.pathname === "/dashboard") activePage = "home";
-  else if (location.pathname.startsWith("/dashboard/sales"))
+  if (normalizedPath === "/dashboard") activePage = "home";
+  else if (normalizedPath.startsWith("/dashboard/sales"))
     activePage = "sales";
-  else if (location.pathname.startsWith("/dashboard/users"))
+  else if (normalizedPath.startsWith("/dashboard/users"))
     activePage = "users";
-  else if (location.pathname.startsWith("/dashboard/admin-users"))
+  else if (normalizedPath.startsWith("/dashboard/admin-users"))
     activePage = "admin-users";
-  else if (location.pathname.startsWith("/dashboard/gestion-missions"))
+  else if (normalizedPath.startsWith("/dashboard/gestion-missions"))
     activePage = "gestion-missions";
-  else if (location.pathname.startsWith("/dashboard/management"))
+  else if (normalizedPath.startsWith("/dashboard/management"))
     activePage = "management";
-  else if (location.pathname.startsWith("/dashboard/settings"))
+  else if (normalizedPath.startsWith("/dashboard/settings"))
     activePage = "settings";
-  else if (location.pathname.startsWith("/dashboard/it-request"))
+  else if (normalizedPath.startsWith("/dashboard/it-request"))
     activePage = "it-request";
 
   const searchParams = new URLSearchParams(location.search);
@@ -41,11 +42,11 @@ const DashboardPage = () => {
     return true; // Exemple : Retourne true si l'utilisateur est administrateur
   };
 
-  if (!isAdmin() && activeMission === "Leads" && location.pathname.startsWith("/dashboard/sales")) {
+  if (!isAdmin() && activeMission === "Leads" && normalizedPath.startsWith("/dashboard/sales")) {
     return <div className="p-6 text-red-500">Accès refusé : Vous n'avez pas accès aux données Canal+.</div>;
   }
 
-  if (!isAdmin() && activeMission === "CANAL+" && location.pathname.startsWith("/dashboard/leads-sales")) {
+  if (!isAdmin() && activeMission === "CANAL+" && normalizedPath.startsWith("/dashboard/leads-sales")) {
     return <div className="p-6 text-red-500">Accès refusé : Vous n'avez pas accès aux données Leads.</div>;
   }
 

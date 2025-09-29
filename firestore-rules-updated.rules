@@ -4,10 +4,23 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Fonction pour vérifier si l'utilisateur a un rôle d'administration
     function hasAdminRole() {
-      return request.auth != null && 
-             (request.auth.token.admin == true || 
-              request.auth.token.direction == true || 
-              request.auth.token.superviseur == true);
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.direction == true ||
+        request.auth.token.superviseur == true ||
+        request.auth.token.supervisor == true ||
+        (request.auth.token.role != null &&
+          request.auth.token.role in [
+            "admin",
+            "direction",
+            "superviseur",
+            "supervisor",
+            "ADMIN",
+            "DIRECTION",
+            "SUPERVISEUR",
+            "SUPERVISOR"
+          ])
+      );
     }
 
     // Règles pour la collection users
@@ -37,6 +50,14 @@ service cloud.firestore {
     match /contactsArgues/{docId} {
       // Seuls les utilisateurs avec rôle admin, direction ou superviseur peuvent lire/créer/modifier/supprimer
       allow read, create, update, delete: if hasAdminRole();
+    }
+
+    // Règles pour la collection des commandes de leads
+    match /leads_orders/{orderId} {
+      allow read, create, update, delete: if request.auth != null;
+    }
+    match /leads_order/{orderId} {
+      allow read, create, update, delete: if request.auth != null;
     }
     
     // Règles pour la collection missions

@@ -24,7 +24,15 @@ service cloud.firestore {
     match /contactsArgues/{docId} {
       allow read, create, update: if request.auth != null;
     }
-    
+
+    // Règles pour la collection des commandes de leads (accès temporaire)
+    match /leads_orders/{orderId} {
+      allow read, create, update, delete: if request.auth != null;
+    }
+    match /leads_order/{orderId} {
+      allow read, create, update, delete: if request.auth != null;
+    }
+
     // Règles pour la collection objectives (données non migrées)
     match /objectives/{objectiveId} {
       allow read, create, update: if request.auth != null;
