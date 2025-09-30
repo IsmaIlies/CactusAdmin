@@ -1,6 +1,7 @@
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import missionService from "./missionService";
+import missionService, { Mission, MissionUser } from "./missionService";
+import userService from "./userService";
 
 class InitializationService {
   /**
@@ -47,6 +48,67 @@ class InitializationService {
         "Erreur lors de l'initialisation de la mission Canal+:",
         error
       );
+      throw error;
+    }
+  }
+
+  /**
+   * Initialise la mission Canal + CIV si elle n'existe pas déjà
+   */
+  async initializeCanalCIVMission(): Promise<string> {
+    try {
+      console.log("Initialisation de la mission Canal + CIV...");
+
+      const missions = await missionService.getMissions();
+      const existing = missions.find((m) =>
+        m.name.toLowerCase().includes("canal + civ") ||
+        m.name.toLowerCase().includes("canal+civ")
+      );
+
+      if (existing) {
+        console.log("Mission Canal + CIV déjà existante:", existing.id);
+        return existing.id!;
+      }
+
+      // Récupérer les superviseurs existants pour les assigner automatiquement
+      let superviseurs: any[] = [];
+      try {
+        const allUsers = await userService.getUsers();
+        superviseurs = allUsers.filter(
+          (u: any) => u.customClaims?.superviseur === true || u.role === "superviseur"
+        );
+      } catch (err) {
+        console.warn("Impossible de récupérer la liste des utilisateurs:", err);
+        superviseurs = [];
+      }
+
+      const missionData: Omit<Mission, "id" | "createdAt" | "updatedAt"> = {
+        name: "Canal + CIV",
+        description: "Mission pour Canal + CIV (ventes et gestion)",
+        users: superviseurs.map((u): MissionUser => ({
+          uid: u.uid,
+          email: u.email,
+          displayName: u.displayName || u.email,
+          role: "supervisor",
+          assignedAt: Timestamp.now(),
+        })),
+        isActive: true,
+        createdBy: "system",
+        startDate: "2025-01-01",
+        endDate: "2025-12-31",
+        allowSelfRegistration: false,
+        maxUsers: 50,
+      };
+
+      const missionId = await missionService.createMission(missionData);
+      console.log("Mission Canal + CIV créée avec l'ID:", missionId);
+
+      // Initialiser les collections pour cette mission
+      await this.initializeMissionCollections(missionId);
+
+      return missionId;
+    } catch (error) {
+      console.error("Erreur lors de l'initialisation de la mission Canal + CIV:", error);
       throw error;
     }
   }

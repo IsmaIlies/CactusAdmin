@@ -18,6 +18,7 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "firebase": "^11.8.1",
+    "firebase-admin": "^13.5.0",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "justwatch-api": "^1.0.7",

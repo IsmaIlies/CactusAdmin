@@ -79,6 +79,53 @@ const Sidebar: React.FC = () => {
     return isAdmin() || isDirection() || isSuperviseur() || isLeadsSupervisor;
   };
 
+  // Vérifie si l'utilisateur est superviseur pour une mission CANAL (ex: "Canal+", "Canal + CIV")
+  const isCanalSupervisor = () => {
+    if (!user) return false;
+
+    // 1) Vérifier claims/roles et missions assignées
+    const claimMissions = user.customClaims?.missions || [];
+    // Normaliser assignedMissions : peut être undefined, string, ou array
+    const assignedRaw = (user as any).assignedMissions;
+    const assigned: string[] = Array.isArray(assignedRaw)
+      ? assignedRaw
+      : typeof assignedRaw === "string"
+      ? [assignedRaw]
+      : [];
+
+    const missionNamesFromClaims = Array.isArray(claimMissions) ? claimMissions : [];
+
+    // 2) Vérifier structure user.missions si présente
+    const missionsField = Array.isArray((user as any).missions) ? (user as any).missions : [];
+
+    const checkNameIsCanal = (name: string | undefined | null) => {
+      if (!name) return false;
+      const lower = name.toString().toLowerCase();
+      return lower.includes("canal") || lower.includes("canal+") || lower.includes("canal + civ") || lower.includes("canal+civ") || lower.includes("canal civ");
+    };
+
+  // Vérifier missions assignées simples (ids ou noms)
+  if (assigned.some((m) => typeof m === "string" && checkNameIsCanal(m))) return true;
+    if (missionNamesFromClaims.some((m: any) => typeof m === 'string' && checkNameIsCanal(m))) return true;
+
+    // Vérifier user.missions entries
+    if (
+      missionsField.some(
+        (m: any) => (m.name && checkNameIsCanal(m.name) && (m.role === 'supervisor' || m.role === 'superviseur'))
+      )
+    ) {
+      return true;
+    }
+
+    // fallback: vérifier role global + custom claim superviseur
+    if ((user.role === "superviseur" || user.role === "supervisor") && assigned.length > 0) {
+      // si superviseur global mais aucune mission listée, ne pas accorder automatiquement
+      return assigned.some((m) => checkNameIsCanal(m));
+    }
+
+    return false;
+  };
+
   return (
     <div className="bg-cactus-900 text-cactus-100 h-screen flex flex-col w-64 shrink-0">
       {/* Header */}
@@ -164,7 +211,7 @@ const Sidebar: React.FC = () => {
                 Présence TA
               </NavLink>
 
-              {(isAdmin() || isDirection()) && (
+              {(isAdmin() || isDirection() || isCanalSupervisor()) && (
                 <>
                   {activeMission === "Leads" && (
                     <NavLink
@@ -239,8 +286,8 @@ const Sidebar: React.FC = () => {
           </Section>
         )}
 
-        {/* Section 3 : Administration (admin only) */}
-        {shouldShowAdminSection() && (
+        {/* Section 3 : Administration (admin only, plus certains superviseurs Canal) */}
+        {(shouldShowAdminSection() || isCanalSupervisor()) && (
           <Section
             title="Administration"
             icon={<Briefcase className="w-4 h-4" />}

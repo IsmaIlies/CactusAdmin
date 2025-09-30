@@ -1230,6 +1230,31 @@ const InitializationModal: React.FC<{
                 : "Initialiser le système"}
             </button>
 
+            {/* Button: create Canal + CIV mission specifically */}
+            <button
+              onClick={async () => {
+                setLoading(true);
+                setStatus("Création de la mission Canal + CIV en cours...");
+                try {
+                  const id = await initializationService.initializeCanalCIVMission();
+                  setStatus(`Canal + CIV créée (ID: ${id})`);
+                  // refresh init status
+                  const newStatus = await initializationService.checkInitializationStatus();
+                  setInitStatus(newStatus);
+                  onSuccess();
+                } catch (err: any) {
+                  console.error('Erreur création Canal + CIV', err);
+                  setStatus(`Erreur: ${err.message || err}`);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className="w-full px-4 py-3 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Créer Canal + CIV
+            </button>
+
             {status && (
               <div
                 className={`p-3 rounded border ${

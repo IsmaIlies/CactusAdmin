@@ -9,7 +9,7 @@ const firebaseConfig = {
   authDomain: "cactus-mm.firebaseapp.com",
   projectId: "cactus-mm",
   // Utiliser exactement le bucket affiché dans la console (sans le préfixe gs://)
-  storageBucket: "cactus-mm.firebasestorage.app",
+  storageBucket: "cactus-mm.appspot.com",
   messagingSenderId: "696239719776",
   appId: "1:696239719776:web:d5fc5d9b73f3f65fea8a05",
 };

@@ -1,4 +1,3 @@
-/* Agrandir le select de l'opération dans l'admin */
 .select--operation {
 	min-width: 320px;
 	width: 100%;
@@ -14,8 +13,7 @@
 .archives-total-white { color: #fff !important; font-weight: 600; }
 /* Force le blanc sur la div archive-hours-right même si section-subtitle est présent */
 .cactus-hours-theme .section-subtitle.archive-hours-right { color: #fff !important; }
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-.cactus-hours-theme{--color-bg:#0b261a;--color-bg-2:#0e2f21;--color-surface:#113f28;--color-surface-2:#0f3824;--color-border:#195d3b;--color-text:#f5fdf8;--color-text-secondary:#c7e6d6;--color-accent:#1ecf88;--accent-2:#12c690;--brand-glow:#1ecf88;--radius:12px;--gap:16px;font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.cactus-hours-theme{--color-bg:#0b261a;--color-bg-2:#0e2f21;--color-surface:#113f28;--color-surface-2:#0f3824;--color-border:#195d3b;--color-text:#f5fdf8;--color-text-secondary:#c7e6d6;--color-accent:#1ecf88;--accent-2:#12c690;--brand-glow:#1ecf88;--radius:12px;--gap:16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
 .cactus-hours-theme .page-shell{padding:24px 24px;display:flex;flex-direction:column;gap:var(--gap);background:radial-gradient(1200px 600px at -10% -20%, rgba(30,173,121,.25), transparent 60%),linear-gradient(180deg, var(--color-bg), var(--color-bg-2));min-height:100%;border-radius:16px}
 .cactus-hours-theme .page-header{display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .cactus-hours-theme .page-title{margin:0;font-size:36px;letter-spacing:.2px;color:var(--color-text)}
@@ -54,6 +52,11 @@
 .cactus-hours-theme .session-chip--empty{border-style:dashed;border-color:rgba(255,255,255,.25);background:transparent;color:rgba(255,255,255,.5)} 
 .cactus-hours-theme .archives-total-chip{display:inline-flex;align-items:center;justify-content:center;min-width:76px;padding:6px 12px;border-radius:12px;background:linear-gradient(90deg, rgba(30,207,136,.32), rgba(30,207,136,.12));font-weight:700;letter-spacing:.04em;color:#f5fff9;box-shadow:0 0 0 1px rgba(30,207,136,.18) inset} 
 .cactus-hours-theme .dispute-chip{display:flex;flex-direction:column;gap:4px;padding:8px 12px;border-radius:12px;border:1px solid rgba(227,83,99,.45);background:rgba(227,83,99,.12);color:#ffe9ec} 
+.cactus-hours-theme .brief-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:8px;background:transparent;color:var(--color-text);font-weight:800}
+
+/* Inputs for brief hours/minutes editing in archives */
+.cactus-hours-theme .brief-number-input{background:#fff;color:#000;border:1px solid rgba(0,0,0,.12);border-radius:8px;padding:6px 8px;font-weight:700}
+.cactus-hours-theme .brief-number-input:focus{outline:2px solid rgba(30,207,136,.25)}
 .cactus-hours-theme .dispute-chip__label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#f8b4c6} 
 .cactus-hours-theme .dispute-chip__text{font-size:13px;line-height:1.25} 
 .cactus-hours-theme .muted{color:rgba(255,255,255,.35);font-size:13px} 

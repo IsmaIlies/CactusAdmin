@@ -6,6 +6,8 @@ import '../modules/checklist/styles/base.css';
 import { useAuth } from '../contexts/AuthContext';
 import { EntryReviewStatus, PROJECT_OPTIONS, ProjectOption } from '../modules/checklist/lib/constants';
 import { submitAgentEntry, subscribeMyEntriesByPeriod } from '../services/hoursService';
+import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth } from '../firebase';
 
 const ChecklistAgentPage: React.FC = () => {
   const { user } = useAuth();
@@ -56,27 +58,68 @@ const ChecklistAgentPage: React.FC = () => {
     setState(next);
     persistAgentState(next);
 
-    await submitAgentEntry(
-      user.id,
-      {
-        id: entry.id,
-        day: entry.day,
-        includeMorning: entry.includeMorning,
-        includeAfternoon: entry.includeAfternoon,
-        morningStart: entry.morningStart,
-        morningEnd: entry.morningEnd,
-        afternoonStart: entry.afternoonStart,
-        afternoonEnd: entry.afternoonEnd,
-        project: entry.project,
-        notes: entry.notes,
-  hasDispute: entry.hasDispute,
-  superviseur: entry.superviseur,
-      } as any,
-      {
-        userDisplayName: user.displayName,
-        userEmail: user.email,
+    try {
+      await submitAgentEntry(
+        user.id,
+        {
+          id: entry.id,
+          day: entry.day,
+          includeMorning: entry.includeMorning,
+          includeAfternoon: entry.includeAfternoon,
+          morningStart: entry.morningStart,
+          morningEnd: entry.morningEnd,
+          afternoonStart: entry.afternoonStart,
+          afternoonEnd: entry.afternoonEnd,
+          project: entry.project,
+          notes: entry.notes,
+          hasDispute: entry.hasDispute,
+          superviseur: entry.superviseur,
+        } as any,
+        {
+          userDisplayName: user.displayName,
+          userEmail: user.email,
+        }
+      );
+      console.debug('[ChecklistAgentPage] submit success');
+    } catch (err: any) {
+      console.error('[ChecklistAgentPage] submit failed', err);
+      try {
+        // Try to surface firebase message if present
+        const msg = err?.message || JSON.stringify(err);
+        // eslint-disable-next-line no-alert
+        alert('Erreur lors de la soumission: ' + msg);
+      } catch {}
+    }
+  };
+
+  // Debug helper: minimal write to reproduce Firestore error independently
+  const testWrite = async () => {
+    try {
+      try {
+        const cu = auth.currentUser as any;
+        console.debug('[ChecklistAgentPage] auth.currentUser', { uid: cu?.uid, email: cu?.email });
+        if (cu && typeof cu.getIdTokenResult === 'function') {
+          const idt = await cu.getIdTokenResult();
+          console.debug('[ChecklistAgentPage] idTokenResult.claims', idt.claims);
+        }
+      } catch (e) {
+        console.warn('[ChecklistAgentPage] failed to get id token result', e);
       }
-    );
+      const db = getFirestore();
+      const id = `debug_${user?.id || 'anon'}_${new Date().toISOString()}`;
+      const payload = { hello: 'world', createdAt: serverTimestamp() } as any;
+      console.debug('[ChecklistAgentPage] testWrite payload', { id, payload });
+      await setDoc(doc(db, 'hoursEntries', id), payload, { merge: true });
+      console.debug('[ChecklistAgentPage] testWrite success', { id });
+      // eslint-disable-next-line no-alert
+      alert('Test write success: ' + id);
+    } catch (err: any) {
+      console.error('[ChecklistAgentPage] testWrite failed', err);
+      try {
+        // eslint-disable-next-line no-alert
+        alert('Test write failed: ' + (err?.message || JSON.stringify(err)));
+      } catch {}
+    }
   };
 
   return (
@@ -90,6 +133,7 @@ const ChecklistAgentPage: React.FC = () => {
           </div>
           <div className="toolbar">
             <button className="button" onClick={onSubmit} disabled={!user}>Soumettre</button>
+            <button className="button button--muted" onClick={testWrite} style={{ marginLeft: 8 }}>Test Write</button>
           </div>
         </div>
 

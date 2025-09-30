@@ -26,3 +26,14 @@ export function formatHours(minutes: number) {
   const m = minutes%60;
   return `${h}h ${String(m).padStart(2,'0')}m`;
 }
+
+/**
+ * Formats a briefCount (fractional hours, e.g. 1.5) to HhMM (e.g. '1h30').
+ */
+export function formatBriefCount(bc?: number | null) {
+  if (bc === undefined || bc === null || isNaN(bc as any)) return '---';
+  const totalMins = Math.round((bc as number) * 60);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${String(h)}h${String(m).padStart(2, '0')}`;
+}

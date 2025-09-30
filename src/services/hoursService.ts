@@ -1,4 +1,5 @@
 import { collection, query, where, onSnapshot, updateDoc, doc, deleteDoc, getFirestore, addDoc, serverTimestamp, setDoc, writeBatch, Timestamp } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { EntryReviewStatus } from '../modules/checklist/lib/constants';
 
 export type HoursEntryDoc = {
@@ -441,5 +442,43 @@ export async function submitAgentEntry(
   } as HoursEntryDoc;
 
   const deterministicId = `${userId}_${payload.day}`;
-  await setDoc(doc(coll, deterministicId), { ...payload, createdAt: serverTimestamp() }, { merge: true });
+  // Basic validation to fail fast with clear message
+  if (!userId) {
+    const err = new Error('submitAgentEntry: missing userId');
+    console.error('[hoursService] submitAgentEntry validation error', err);
+    throw err;
+  }
+  if (!payload.day) {
+    const err = new Error('submitAgentEntry: missing payload.day');
+    console.error('[hoursService] submitAgentEntry validation error', { err, payload });
+    throw err;
+  }
+  // Log current auth state and token to help diagnose permission/400 issues
+  try {
+    const current = auth.currentUser;
+    console.debug('[hoursService] auth.currentUser', { uid: current?.uid, email: current?.email });
+    if (current && typeof current.getIdTokenResult === 'function') {
+      try {
+        const idToken = await current.getIdTokenResult();
+        console.debug('[hoursService] idTokenResult.claims', idToken.claims);
+      } catch (e) {
+        console.warn('[hoursService] getIdTokenResult failed', e);
+      }
+    }
+  } catch (e) {
+    console.warn('[hoursService] failed to log auth info', e);
+  }
+  try {
+    // Create a shallow copy and remove undefined fields to avoid Firestore/REST rejecting the request
+    const cleaned: any = { ...payload };
+    Object.keys(cleaned).forEach((k) => {
+      if (cleaned[k] === undefined) delete cleaned[k];
+    });
+    console.debug('[hoursService] submitAgentEntry payload', { deterministicId, cleaned });
+    await setDoc(doc(coll, deterministicId), { ...cleaned, createdAt: serverTimestamp() }, { merge: true });
+    console.debug('[hoursService] submitAgentEntry success', { deterministicId });
+  } catch (err) {
+    console.error('[hoursService] submitAgentEntry error', err, { deterministicId, payload });
+    throw err;
+  }
 }

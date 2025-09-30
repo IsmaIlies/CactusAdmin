@@ -1320,6 +1320,90 @@ exports.removeMissionClaims = onCall(
   }
 );
 
+// Fonction admin pour créer une mission côté serveur et propager les claims
+exports.createMissionAdmin = onCall(
+  { region: "europe-west9" },
+  async (request) => {
+    const { missionData, users, serverKey } = request.data || {};
+
+    if (!missionData || !missionData.name) {
+      throw new HttpsError("invalid-argument", "Données de mission invalides");
+    }
+
+    try {
+      // Vérifier l'authentification du caller
+      const callerUid = request.auth?.uid;
+      let callerRecord = null;
+      let callerClaims = {};
+
+      if (callerUid) {
+        callerRecord = await admin.auth().getUser(callerUid);
+        callerClaims = callerRecord.customClaims || {};
+      }
+
+      // Autoriser si caller admin OR si serverKey correspond à la clé configurée
+      const functionsConfig = functions.config ? functions.config() : {};
+      const configuredKey = functionsConfig?.admin?.key || process.env.ADMIN_FUNCTION_KEY || null;
+
+      const isAdminCaller = callerClaims && (callerClaims.admin === true || callerClaims.direction === true);
+      const validServerKey = serverKey && configuredKey && serverKey === configuredKey;
+
+      if (!isAdminCaller && !validServerKey) {
+        throw new HttpsError("permission-denied", "Seuls les administrateurs ou un serveur autorisé peuvent créer une mission");
+      }
+
+      const db = admin.firestore();
+
+      // Préparer la donnée mission
+      const now = admin.firestore.Timestamp.now();
+      const mission = {
+        name: String(missionData.name),
+        description: missionData.description ? String(missionData.description) : "",
+        users: Array.isArray(users) ? users.map(u => ({ uid: u.uid, email: u.email, displayName: u.displayName || '', role: u.role || 'ta', assignedAt: now })) : [],
+        isActive: typeof missionData.isActive === 'boolean' ? missionData.isActive : true,
+        createdBy: callerUid || 'server',
+        startDate: missionData.startDate || null,
+        endDate: missionData.endDate || null,
+        allowSelfRegistration: !!missionData.allowSelfRegistration,
+        maxUsers: missionData.maxUsers || 50,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // Créer la mission
+      const docRef = await db.collection('missions').add(mission);
+      const missionId = docRef.id;
+
+      // Propager les claims si des utilisateurs sont fournis
+      if (Array.isArray(users) && users.length > 0) {
+        const promiseResults = await Promise.all(users.map(async (u) => {
+          try {
+            const userRecord = await admin.auth().getUser(u.uid);
+            const currentClaims = userRecord.customClaims || {};
+
+            const missionClaims = currentClaims.missions || {};
+            missionClaims[missionId] = { role: u.role || 'ta', assignedAt: admin.firestore.Timestamp.now() };
+
+            const newClaims = { ...currentClaims, missions: missionClaims };
+            await admin.auth().setCustomUserClaims(u.uid, newClaims);
+            return { success: true, uid: u.uid };
+          } catch (err) {
+            console.error(`Erreur lors de la mise à jour des claims pour ${u.uid}:`, err);
+            return { success: false, uid: u.uid, error: err.message };
+          }
+        }));
+
+        return { success: true, missionId, claimResults: promiseResults };
+      }
+
+      return { success: true, missionId };
+    } catch (error) {
+      console.error('createMissionAdmin error', error);
+      throw new HttpsError('internal', error.message || 'Erreur création mission');
+    }
+  }
+);
+
 // Fonction pour rechercher un utilisateur par email
 exports.findUserByEmail = onCall(
   { region: "europe-west9" },

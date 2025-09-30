@@ -72,7 +72,6 @@ function exportArchivesToCSV(entries: AdminArchiveEntry[], period: string) {
   // Séparateur visuel entre chaque entrée
   // Pas de guillemets, accents autorisés, point-virgule comme séparateur
   const escape = (v: string | number) => String(v ?? '').replace(/;/g, ',');
-  const sep = Array(columns.length).fill('---').join(';');
   // Générer le CSV avec une ligne de séparation après chaque entrée
   const csvLines = [columns.join(';')];
   for (const row of rows) {
@@ -88,16 +87,22 @@ function exportArchivesToCSV(entries: AdminArchiveEntry[], period: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `archives_validees_${period}.csv`;
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+  a.download = `archives_validees_${period}_${dateStr}.csv`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 import React, { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import ChecklistTopHeader from '../modules/checklist/components/ChecklistTopHeader';
 import '../modules/checklist/styles/base.css';
-import { subscribeEntriesByPeriod } from '../services/hoursService';
-import { computeWorkedMinutes, formatDayLabel, formatMonthLabel } from '../modules/checklist/lib/time';
+import { subscribeEntriesByPeriod, updateEntryFields } from '../services/hoursService';
+import { computeWorkedMinutes, formatDayLabel, formatMonthLabel, formatBriefCount } from '../modules/checklist/lib/time';
 import { EntryReviewStatus } from '../modules/checklist/lib/constants';
 
 type AdminArchiveEntry = {
@@ -163,6 +168,48 @@ const ChecklistArchivesPage: React.FC = () => {
 
   const formatAgentLabel = (userDisplayName?: string | null, userEmail?: string | null, userId?: string) => {
     return (userDisplayName && userDisplayName.trim()) || userEmail || (userId || '');
+  };
+
+  const { isAdmin, isDirection } = useAuth();
+
+  // Inline editing state for admins/direction
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState<AdminArchiveEntry | null>(null);
+  const [editingBriefHours, setEditingBriefHours] = useState<number>(0);
+  const [editingBriefMinutes, setEditingBriefMinutes] = useState<number>(0);
+  const startEditingEntry = (entry: AdminArchiveEntry) => {
+    setEditingDocId(entry._docId);
+    setEditingDraft({ ...entry });
+    // initialize brief H/M editor
+    const bc = (entry.briefCount ?? 0) as number;
+    const h = Math.floor(bc);
+    const m = Math.round((bc - h) * 60);
+    setEditingBriefHours(isNaN(h) ? 0 : h);
+    setEditingBriefMinutes(isNaN(m) ? 0 : m);
+  };
+
+  const cancelEditingEntry = () => {
+    setEditingDocId(null);
+    setEditingDraft(null);
+    setEditingBriefHours(0);
+    setEditingBriefMinutes(0);
+  };
+
+  const saveEditingEntry = async () => {
+    if (!editingDocId || !editingDraft) return;
+    // Only update briefCount in archives — compute from hours+minutes
+    const h = Number(editingBriefHours) || 0;
+    const m = Number(editingBriefMinutes) || 0;
+    const newBrief = Math.round((h + (m / 60)) * 100) / 100; // 2-decimal hours
+    await updateEntryFields(editingDocId, {
+      briefCount: newBrief,
+    });
+    // update local state for immediate UX
+    setEntries((prev) => prev.map(e => e._docId === editingDocId ? ({ ...e, briefCount: newBrief }) : e));
+    setEditingDocId(null);
+    setEditingDraft(null);
+    setEditingBriefHours(0);
+    setEditingBriefMinutes(0);
   };
 
   const agents = useMemo(() => {
@@ -283,6 +330,7 @@ const ChecklistArchivesPage: React.FC = () => {
                           if (e.reviewStatus === EntryReviewStatus.Rejected) return { label: 'Rejeté', color: '#c0392b', bg: '#ffeaea' };
                           return { label: 'En attente', color: '#b8860b', bg: '#fffbe6' };
                         })();
+                        const isEditing = editingDocId === e._docId;
                         return (
                           <tr key={e._docId}>
                             <td>
@@ -305,16 +353,34 @@ const ChecklistArchivesPage: React.FC = () => {
                                 <span className="session-chip session-chip--empty">N/A</span>
                               )}
                             </td>
-                            <td><span className="project-pill">{e.project}</span></td>
+                            <td>
+                              <span className="project-pill">{e.project}</span>
+                            </td>
                             <td className="archives-total-white">
                               <span className="archives-total-chip">{totalLabel}</span>
                             </td>
                             <td>
-                              <span className="brief-chip">
-                                {(typeof e.briefCount === 'number' && !isNaN(e.briefCount))
-                                  ? `${e.briefCount.toString().padStart(2, '0')}h00`
-                                  : '---'}
-                              </span>
+                              {isEditing ? (
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                  <input className="brief-number-input" type="number" min={0} value={editingBriefHours} onChange={(ev) => setEditingBriefHours(Number(ev.target.value || 0))} style={{ width: 60 }} />
+                                  <span>h</span>
+                                  <input className="brief-number-input" type="number" min={0} max={59} value={editingBriefMinutes} onChange={(ev) => setEditingBriefMinutes(Number(ev.target.value || 0))} style={{ width: 60 }} />
+                                  <span>min</span>
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <button className="button" onClick={saveEditingEntry}>Enregistrer</button>
+                                    <button className="button button--ghost" onClick={cancelEditingEntry}>Annuler</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="brief-chip">{formatBriefCount(e.briefCount)}</span>
+                                  { (isAdmin() || isDirection()) && (
+                                    <div style={{ marginTop: 8 }}>
+                                      <button className="button button--ghost" onClick={() => startEditingEntry(e)}>Modifier</button>
+                                    </div>
+                                  ) }
+                                </div>
+                              )}
                             </td>
                             <td>
                               <span style={{

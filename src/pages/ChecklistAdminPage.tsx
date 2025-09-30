@@ -67,7 +67,7 @@ function exportChecklistToCSV(entries: AdminEntry[], period: string) {
     const afternoonStart = e.afternoonStart ? formatHour(pad(e.afternoonStart)) : '---';
     const afternoonEnd = e.afternoonEnd ? formatHour(pad(e.afternoonEnd)) : '---';
     const prod = (e.morningStart && e.morningEnd) ? duration(e.morningStart, e.morningEnd) : '---';
-    const brief = (typeof e.briefCount === 'number' && !isNaN(e.briefCount)) ? `${e.briefCount.toString().padStart(2, '0')}h00` : '---';
+  const brief = formatBriefCount((e as any).briefCount);
     const total = (() => {
       const d1 = (e.morningStart && e.morningEnd) ? duration(e.morningStart, e.morningEnd) : '00h00';
       const d2 = (e.afternoonStart && e.afternoonEnd) ? duration(e.afternoonStart, e.afternoonEnd) : '00h00';
@@ -99,7 +99,6 @@ function exportChecklistToCSV(entries: AdminEntry[], period: string) {
     ];
   });
   const escape = (v: string | number) => String(v ?? '').replace(/;/g, ',');
-  const sep = Array(columns.length).fill('---').join(';');
   const csvLines = [columns.join(';')];
   for (const row of rows) {
     csvLines.push(row.map(escape).join(';'));
@@ -120,9 +119,10 @@ function exportChecklistToCSV(entries: AdminEntry[], period: string) {
 }
 import { ReviewBadge } from '../modules/checklist/components/ReviewBadge';
 import StatusBadge from '../modules/checklist/components/StatusBadge';
+import { useAuth } from '../contexts/AuthContext';
 import { EntryReviewStatus, ProjectOption, Status } from '../modules/checklist/lib/constants';
 import { DayEntry } from '../modules/checklist/lib/storage';
-import { computeWorkedMinutes, formatDayLabel, formatMonthLabel } from '../modules/checklist/lib/time';
+import { computeWorkedMinutes, formatDayLabel, formatMonthLabel, formatBriefCount } from '../modules/checklist/lib/time';
 import '../modules/checklist/styles/base.css';
 import ChecklistTopHeader from '../modules/checklist/components/ChecklistTopHeader';
 import {
@@ -159,6 +159,7 @@ const ChecklistAdminPage: React.FC = () => {
     ['CANAL 211', 'CANAL 214', 'CANAL 210', 'BRIEF'] as ProjectOption[]
   ), []);
   const [periodFilter, setPeriodFilter] = useState<string>(currentPeriod());
+  const { isAdmin, isDirection } = useAuth();
   const [remoteEntries, setRemoteEntries] = useState<AdminEntry[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'pending' | 'history'>('pending');
@@ -476,7 +477,8 @@ const ChecklistAdminPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {displayedEntries.map((entry) => {
-                    const isEditingAllowed = viewMode === 'pending';
+                    // Admins or Direction can edit even validated (history) entries
+                    const isEditingAllowed = viewMode === 'pending' || isAdmin() || isDirection();
                     const isEditing = isEditingAllowed && editingDocId === entry._docId && editingDraft;
                     const draftSource = isEditing && editingDraft ? editingDraft : entry;
                     const agentLabel = (draftSource.userDisplayName && draftSource.userDisplayName.trim()) || draftSource.userEmail || draftSource.userId;
@@ -661,10 +663,10 @@ const ChecklistAdminPage: React.FC = () => {
                                 letterSpacing: 0.5,
                                 transition: 'box-shadow 0.2s',
                               }}
-                              title={`Brief: ${Number(entry.briefCount)}h`}
+                              title={`Brief: ${formatBriefCount(entry.briefCount)}`}
                             >
                               <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{marginRight: 3}} xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="9" fill="#fff" stroke="#2ecc40" strokeWidth="2"/><path d="M7.5 10.5L9.5 12.5L13 9" stroke="#27ae60" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                              {Number(entry.briefCount)}h
+                              {formatBriefCount(entry.briefCount)}
                             </span>
                           ) : (
                             <span style={{ color: '#b0b0b0', fontStyle: 'italic' }}>—</span>

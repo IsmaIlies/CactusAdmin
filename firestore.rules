@@ -5,6 +5,7 @@ service cloud.firestore {
     // Fonction pour vérifier si l'utilisateur a un rôle d'administration
     function hasAdminRole() {
       return request.auth != null && (
+        // primary: check custom claims on the token
         request.auth.token.admin == true ||
         request.auth.token.direction == true ||
         request.auth.token.superviseur == true ||
@@ -19,16 +20,31 @@ service cloud.firestore {
             "DIRECTION",
             "SUPERVISEUR",
             "SUPERVISOR"
-          ])
+          ]
+        ) ||
+        // fallback: check the user's document in /users/{uid} for a role field
+        // (useful when custom claims were recently set but client token not refreshed)
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in [
+            "admin",
+            "direction",
+            "superviseur",
+            "supervisor",
+            "ADMIN",
+            "DIRECTION",
+            "SUPERVISEUR",
+            "SUPERVISOR"
+          ]
+        )
       );
     }
 
     // Fonction pour autoriser certains emails spécifiques
     function isAllowedEmail() {
       return request.auth != null && (
-        request.auth.token.email == 'i.boultame@emiciv.fr' ||
-        request.auth.token.email == 'j.allione@emiciv.fr' ||
-        request.auth.token.email == 'i.brai@emiciv.fr'
+        request.auth.token.email == 'i.boultame@mars-marketing.fr' ||
+        request.auth.token.email == 'j.allione@mars-marketing.fr' ||
+        request.auth.token.email == 'i.brai@mars-marketing.fr'
       );
     }
 
