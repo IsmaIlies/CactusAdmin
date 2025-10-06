@@ -1,35 +1,5 @@
 // Input toujours éditable pour Brief, sauvegarde au blur uniquement
-function BriefDirectInput({ entry }: { entry: AdminEntry }) {
-  const [value, setValue] = React.useState(
-    typeof entry.briefCount === 'number' ? String(entry.briefCount) : ''
-  );
-  React.useEffect(() => {
-    setValue(typeof entry.briefCount === 'number' ? String(entry.briefCount) : '');
-  }, [entry.briefCount]);
-
-  const handleBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
-    const val = e.target.value === '' ? null : Number(e.target.value);
-    await updateEntryFields(entry._docId, { briefCount: val });
-  };
-
-  return (
-    <input
-      type="number"
-      min={0}
-      value={value}
-      style={{
-        width: 60,
-        textAlign: 'center',
-        background: '#f3f4f6',
-        color: '#222',
-        border: '1px solid #bbb',
-        borderRadius: 4
-      }}
-      onChange={e => setValue(e.target.value)}
-      onBlur={handleBlur}
-    />
-  );
-}
+// (BriefDirectInput) legacy helper removed; inline editing is handled directly in table
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 // CSV export utility
 function exportChecklistToCSV(entries: AdminEntry[], period: string) {
@@ -128,7 +98,6 @@ import ChecklistTopHeader from '../modules/checklist/components/ChecklistTopHead
 import {
   approveEntry,
   bulkUpdateEntries,
-  deleteEntry,
   subscribeEntriesByPeriod,
   updateEntryFields,
 } from '../services/hoursService';
@@ -234,7 +203,7 @@ const ChecklistAdminPage: React.FC = () => {
   }, [remoteEntries, selectedUserId]);
 
   const pendingEntries = useMemo(
-    () => filteredEntries.filter((entry) => entry.reviewStatus !== EntryReviewStatus.Approved || entry.hasDispute),
+    () => filteredEntries.filter((entry) => entry.reviewStatus === EntryReviewStatus.Pending),
     [filteredEntries]
   );
 
@@ -321,29 +290,8 @@ const ChecklistAdminPage: React.FC = () => {
     setSelectedUserId(event.target.value);
   }, []);
 
-  const onApproveAll = useCallback(async () => {
-    const targets = pendingEntries.map((entry) => entry._docId);
-    if (!targets.length) return;
-    await bulkUpdateEntries(targets, {
-      reviewStatus: EntryReviewStatus.Approved,
-      hasDispute: false,
-      rejectionNote: null,
-      status: 'submitted',
-    });
-    setIsRejecting(false);
-    setRejectionDraft('');
-  }, [pendingEntries]);
-
-  const onResetToDraft = useCallback(async () => {
-    const targets = pendingEntries.map((entry) => entry._docId);
-    if (!targets.length) return;
-    await bulkUpdateEntries(targets, {
-      reviewStatus: EntryReviewStatus.Pending,
-      status: 'draft',
-      hasDispute: false,
-      rejectionNote: null,
-    });
-  }, [pendingEntries]);
+  // onApproveAll / onResetToDraft removed
+    // Bulk approve/reset handlers removed from UI; keep confirmRejection (bulk reject) if needed later
 
   const confirmRejection = useCallback(async () => {
     const note = rejectionDraft.trim();
@@ -360,12 +308,39 @@ const ChecklistAdminPage: React.FC = () => {
     setRejectionDraft('');
   }, [pendingEntries, rejectionDraft]);
 
+  // Rejeter une seule checklist (remplace l'ancienne suppression)
+  const rejectSingleEntry = useCallback(async (docId: string) => {
+    try {
+      const note = window.prompt('Motif du rejet ? (obligatoire)');
+      if (note == null) return; // annulé
+      const trimmed = note.trim();
+      if (!trimmed) return;
+      await updateEntryFields(docId, {
+        reviewStatus: EntryReviewStatus.Rejected,
+        status: 'draft',
+        hasDispute: true,
+        rejectionNote: trimmed,
+      });
+      // MAJ locale immédiate pour une meilleure UX
+      setRemoteEntries((prev) => prev.map((e) => (
+        e._docId === docId
+          ? { ...e, reviewStatus: EntryReviewStatus.Rejected, status: 'draft', hasDispute: true, rejectionNote: trimmed }
+          : e
+      )));
+    } catch (err) {
+      console.error('rejectSingleEntry error', err);
+      try {
+        alert('Impossible de rejeter la checklist. Vérifiez vos droits ou réessayez.');
+      } catch {}
+    }
+  }, []);
+
   const selectedUserLabel = useMemo(() => {
     if (selectedUserId === 'all') return 'Tous les agents';
     return userOptions.find((option) => option.value === selectedUserId)?.label || selectedUserId;
   }, [selectedUserId, userOptions]);
 
-  const disableBulkActions = selectedUserId === 'all' || pendingEntries.length === 0;
+  // const disableBulkActions = selectedUserId === 'all' || pendingEntries.length === 0;
   const heroPeriodLabel = formatMonthLabel(periodFilter).toUpperCase();
   const totalHoursDisplay = formatHoursCompact(totalMinutesPeriod);
   const emptyStateMessage = useMemo(() => {
@@ -702,10 +677,8 @@ const ChecklistAdminPage: React.FC = () => {
                                 }}>
                                   Valider
                                 </button>
-                                <button type="button" className="button button--danger" onClick={async () => {
-                                  await deleteEntry(entry._docId);
-                                }}>
-                                  Refuser
+                                <button type="button" className="button button--danger" onClick={() => rejectSingleEntry(entry._docId)}>
+                                  Rejeter
                                 </button>
                               </>
                             ) : (

@@ -42,6 +42,8 @@ export interface ContactsArgues {
   count: number;
   updatedAt?: Timestamp;
   updatedBy?: string;
+  // Optional routing field to segment by entity/region (e.g., 'canal-fr', 'canal-civ')
+  entity?: string;
 }
 
 export interface Offer {
@@ -733,10 +735,13 @@ class SalesService {
    * @param dateStr Date au format YYYY-MM-DD
    * @returns Le nombre de contacts argumentés pour cette date
    */
-  async getContactsArguesForDate(dateStr: string): Promise<number> {
+  async getContactsArguesForDate(dateStr: string, entity?: string): Promise<number> {
     try {
       const contactsArguesRef = collection(db, "contactsArgues");
-      const q = query(contactsArguesRef, where("date", "==", dateStr));
+      let q = query(contactsArguesRef, where("date", "==", dateStr));
+      if (entity) {
+        q = query(q, where("entity", "==", entity));
+      }
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) return 0;
@@ -759,7 +764,8 @@ class SalesService {
    */
   async getContactsArguesForPeriod(
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    entity?: string
   ): Promise<ContactsArgues[]> {
     try {
       const contactsArguesRef = collection(db, "contactsArgues");
@@ -771,6 +777,10 @@ class SalesService {
 
       if (endDate) {
         q = query(q, where("date", "<=", endDate));
+      }
+
+      if (entity) {
+        q = query(q, where("entity", "==", entity));
       }
 
       const snapshot = await getDocs(q);
@@ -792,10 +802,13 @@ class SalesService {
    * Récupère les 30 derniers contacts argumentés
    * @returns Tableau des 30 derniers contacts argumentés
    */
-  async getRecentContactsArgues(): Promise<ContactsArgues[]> {
+  async getRecentContactsArgues(entity?: string): Promise<ContactsArgues[]> {
     try {
       const contactsArguesRef = collection(db, "contactsArgues");
-      const q = query(contactsArguesRef, orderBy("date", "desc"), limit(30));
+      let q = query(contactsArguesRef, orderBy("date", "desc"), limit(30));
+      if (entity) {
+        q = query(contactsArguesRef, where("entity", "==", entity), orderBy("date", "desc"), limit(30));
+      }
       const snapshot = await getDocs(q);
 
       return snapshot.docs.map((doc) => ({
@@ -821,11 +834,15 @@ class SalesService {
   async saveContactsArgues(
     date: string,
     count: number,
-    userId?: string
+    userId?: string,
+    entity?: string
   ): Promise<string> {
     try {
       const contactsArguesRef = collection(db, "contactsArgues");
-      const q = query(contactsArguesRef, where("date", "==", date));
+      let q = query(contactsArguesRef, where("date", "==", date));
+      if (entity) {
+        q = query(q, where("entity", "==", entity));
+      }
       const snapshot = await getDocs(q);
 
       const data: ContactsArgues = {
@@ -833,6 +850,7 @@ class SalesService {
         count,
         updatedAt: Timestamp.now(),
         updatedBy: userId,
+        entity,
       };
 
       let docId;
@@ -844,11 +862,13 @@ class SalesService {
       } else {
         // Mettre à jour le document existant
         const docRef = doc(db, "contactsArgues", snapshot.docs[0].id);
-        await updateDoc(docRef, {
+        const update: any = {
           count: count,
           updatedAt: Timestamp.now(),
           updatedBy: userId || null,
-        });
+        };
+        if (entity) update.entity = entity;
+        await updateDoc(docRef, update);
         docId = snapshot.docs[0].id;
       }
 

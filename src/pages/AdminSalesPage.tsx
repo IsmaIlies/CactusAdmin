@@ -57,6 +57,7 @@ import ContactsArguesModal from "../components/admin/ContactsArguesModal";
 import { Mail, Download, Calendar, Save, BarChart3 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { onSnapshot, collection, query, orderBy } from "firebase/firestore";
+// EntityContext removed per request
 
 // --- Normaliseurs de statuts ---
 
@@ -152,6 +153,7 @@ const normalizeOrderStatus = (value: any): OrderStatus => {
 
 const AdminSalesPage: React.FC = () => {
   const { user } = useAuth();
+
   const [sales, setSales] = useState<Sale[]>([]);
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,7 +189,7 @@ const AdminSalesPage: React.FC = () => {
     setLoading(true);
     setError("");
 
-    const salesQuery = query(collection(db, "sales"), orderBy("date", "desc"));
+  const salesQuery = query(collection(db, "sales"), orderBy("date", "desc"));
 
     const unsubscribe = onSnapshot(
       salesQuery,
@@ -235,6 +237,7 @@ const AdminSalesPage: React.FC = () => {
           } as Sale;
         });
 
+        // No entity-based filtering: show all sales
         setSales(normalized);
         setLoading(false);
       },
@@ -254,11 +257,13 @@ const AdminSalesPage: React.FC = () => {
       try {
         setLoadingContactsArgues(true);
         const today = new Date().toISOString().split("T")[0];
-        const todayContacts = await salesService.getContactsArguesForDate(today);
-        setContactsArgues(todayContacts.toString());
+        // No entity-based filtering: sum all entries
+        const listToday = await salesService.getContactsArguesForPeriod(today, today);
+        const todayTotal = listToday.reduce((sum, d) => sum + (d.count || 0), 0);
+        setContactsArgues(todayTotal.toString());
 
-        const recentContacts = await salesService.getRecentContactsArgues();
-        setContactsArguesHistory(recentContacts);
+        const recentAll = await salesService.getRecentContactsArgues();
+        setContactsArguesHistory(recentAll);
       } catch (error) {
         console.error("Erreur lors du chargement des contacts argumentés:", error);
       } finally {
@@ -503,8 +508,8 @@ const AdminSalesPage: React.FC = () => {
       setSavingContactsArgues(true);
       const today = new Date().toISOString().split("T")[0];
       const count = parseInt(contactsArgues) || 0;
-      await salesService.saveContactsArgues(today, count, (user as any)?.uid);
-      const updatedHistory = await salesService.getRecentContactsArgues();
+  await salesService.saveContactsArgues(today, count, (user as any)?.uid);
+  const updatedHistory = await salesService.getRecentContactsArgues();
       setContactsArguesHistory(updatedHistory);
     } catch (error) {
       console.error("Erreur lors de l'enregistrement des CA:", error);
@@ -516,8 +521,8 @@ const AdminSalesPage: React.FC = () => {
 
   const handleSaveHistoricalContactsArgues = async (date: string, count: number) => {
     try {
-      await salesService.saveContactsArgues(date, count, (user as any)?.uid);
-      const updatedHistory = await salesService.getRecentContactsArgues();
+  await salesService.saveContactsArgues(date, count, (user as any)?.uid);
+  const updatedHistory = await salesService.getRecentContactsArgues();
       setContactsArguesHistory(updatedHistory);
       const today = new Date().toISOString().split("T")[0];
       if (date === today) setContactsArgues(count.toString());
@@ -527,6 +532,8 @@ const AdminSalesPage: React.FC = () => {
       return Promise.reject(error);
     }
   };
+
+  
 
   if (loading) {
     return (

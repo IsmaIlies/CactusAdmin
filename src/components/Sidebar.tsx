@@ -131,6 +131,36 @@ const Sidebar: React.FC = () => {
     return false;
   };
 
+  const missionNamesLower = () => {
+    const list: string[] = [];
+    const push = (v?: any) => {
+      if (!v) return;
+      if (Array.isArray(v)) v.forEach((x) => push(x));
+      else list.push(String(v).toLowerCase());
+    };
+    push(user?.assignedMissions);
+    push(user?.customClaims?.missions);
+    if (Array.isArray((user as any)?.missions)) {
+      (user as any).missions.forEach((m: any) => push(m?.name));
+    }
+    return list;
+  };
+
+  const canAccessFR = () => {
+    if (isAdmin() || isDirection()) return true;
+    if (!isCanalSupervisor()) return false;
+    const lowers = missionNamesLower();
+    const hasCiv = lowers.some((m) => m.includes("civ"));
+    const hasFr = lowers.some((m) => m.includes("fr"));
+    const hasCanal = lowers.some((m) => m.includes("canal"));
+    if (hasFr) return true;
+    if (hasCiv) return false; // CIV-only shouldn't access FR
+    // generic CANAL without region defaults to FR access
+    return hasCanal;
+  };
+
+  // CIV access checker removed with CIV page removal
+
   return (
     <div className="bg-cactus-900 text-cactus-100 h-screen flex flex-col w-64 shrink-0">
       {/* Header */}
@@ -160,6 +190,7 @@ const Sidebar: React.FC = () => {
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                   <span className="font-medium">Canal+</span>
                 </div>
+                {/* Pas de sous-choix FR/CIV: le cloisonnement est automatique selon la mission assignée */}
                 <div
                   className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
                     activeMission === "Leads"
@@ -233,8 +264,8 @@ const Sidebar: React.FC = () => {
                 </NavLink>
               )}
 
-              {/* Ventes Canal+: admin/direction ou superviseur Canal, et mission active CANAL+ */}
-              {(isAdmin() || isDirection() || isCanalSupervisor()) && activeMission === "CANAL+" && (
+              {/* Ventes Canal+ (FR uniquement): visible pour admin/direction ou superviseur avec accès FR */}
+              {(isAdmin() || isDirection() || (isCanalSupervisor() && canAccessFR())) && activeMission === "CANAL+" && (
                 <NavLink
                   to="/dashboard/sales"
                   className={({ isActive }) =>
@@ -250,8 +281,10 @@ const Sidebar: React.FC = () => {
                 </NavLink>
               )}
 
-              {/* Management: admin/direction ou superviseur Canal */}
-              {(isAdmin() || isDirection() || isCanalSupervisor()) && (
+              
+
+              {/* Management: admin/direction ou superviseur Canal (toutes entités Canal) */}
+              {(isAdmin() || isDirection() || (isCanalSupervisor() && activeMission === "CANAL+")) && (
                 <NavLink
                   to="/dashboard/management"
                   className={({ isActive }) =>

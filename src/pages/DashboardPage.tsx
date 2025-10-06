@@ -7,6 +7,7 @@ import MissionManagementPage from "./MissionManagementPage";
 import ManagementPage from "./ManagementPage";
 import ItRequestPage from "./ItRequestPage";
 import AdminUsersPage from "./AdminUsersPage";
+ 
 
 // import { useAuth } from "../contexts/AuthContext"; // Commenté avec les boutons de debug
 
@@ -28,6 +29,7 @@ const DashboardPage = () => {
     activePage = "gestion-missions";
   else if (normalizedPath.startsWith("/dashboard/management"))
     activePage = "management";
+  
   else if (normalizedPath.startsWith("/dashboard/settings"))
     activePage = "settings";
   else if (normalizedPath.startsWith("/dashboard/it-request"))
@@ -83,6 +85,7 @@ const DashboardPage = () => {
           <div style={{ display: activePage === "management" ? "block" : "none" }} className="h-full overflow-auto p-6">
             <ManagementPage />
           </div>
+          
           <div style={{ display: activePage === "settings" ? "block" : "none" }} className="h-full overflow-auto p-6">
             <SettingsPage />
           </div>
