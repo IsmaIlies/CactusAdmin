@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Eye, EyeOff } from "lucide-react";
@@ -13,10 +13,19 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const [selectedUniverse, setSelectedUniverse] = useState<"canal" | "leads" | null>(null);
 
+  // Si déjà connecté, rediriger automatiquement vers le dashboard
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const handleUniverseSelection = (universe: "canal" | "leads") => {
     setSelectedUniverse(universe);
     if (user) {
-      navigate(universe === "leads" ? "/admin/leads" : "/admin/canal");
+      // Supervisors/direction doivent aller sur les routes dashboard, les routes /admin/* sont admin-only
+      navigate(universe === "leads" ? "/dashboard/leads" : "/dashboard/canal");
     }
   };
 
@@ -28,12 +37,13 @@ const LoginPage = () => {
     try {
       const success = await login(email, password);
       if (success) {
+        // Par défaut, diriger vers le dashboard selon l'univers; /admin/* reste réservé aux admins
         if (selectedUniverse === "leads") {
-          navigate("/admin/leads");
+          navigate("/dashboard/leads");
         } else if (selectedUniverse === "canal") {
-          navigate("/admin/canal");
+          navigate("/dashboard/canal");
         } else {
-          navigate("/admin/canal");
+          navigate("/dashboard");
         }
       } else {
         setError("Identifiants invalides. Veuillez réessayer.");
@@ -53,11 +63,11 @@ const LoginPage = () => {
       const success = await loginWithMicrosoft();
       if (success) {
         if (selectedUniverse === "leads") {
-          navigate("/admin/leads");
+          navigate("/dashboard/leads");
         } else if (selectedUniverse === "canal") {
-          navigate("/admin/canal");
+          navigate("/dashboard/canal");
         } else {
-          navigate("/admin/canal");
+          navigate("/dashboard");
         }
       } else {
         setError("Échec de la connexion avec Microsoft. Veuillez réessayer.");

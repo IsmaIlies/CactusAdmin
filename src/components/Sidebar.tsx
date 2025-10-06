@@ -83,6 +83,11 @@ const Sidebar: React.FC = () => {
   const isCanalSupervisor = () => {
     if (!user) return false;
 
+    // Cas simple: si l'utilisateur est superviseur et la mission active est CANAL+, on le considère superviseur Canal
+    if (isSuperviseur() && activeMission === "CANAL+") {
+      return true;
+    }
+
     // 1) Vérifier claims/roles et missions assignées
     const claimMissions = user.customClaims?.missions || [];
     // Normaliser assignedMissions : peut être undefined, string, ou array
@@ -211,82 +216,86 @@ const Sidebar: React.FC = () => {
                 Présence TA
               </NavLink>
 
+              {/* Ventes Leads: seulement admin/direction */}
+              {(isAdmin() || isDirection()) && activeMission === "Leads" && (
+                <NavLink
+                  to="/dashboard/leads-sales"
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive
+                        ? "bg-cactus-700/70 text-white"
+                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <DollarSign className="w-5 h-5 mr-3" />
+                  Ventes Leads
+                </NavLink>
+              )}
+
+              {/* Ventes Canal+: admin/direction ou superviseur Canal, et mission active CANAL+ */}
+              {(isAdmin() || isDirection() || isCanalSupervisor()) && activeMission === "CANAL+" && (
+                <NavLink
+                  to="/dashboard/sales"
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive
+                        ? "bg-cactus-700/70 text-white"
+                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <DollarSign className="w-5 h-5 mr-3" />
+                  Ventes Canal+
+                </NavLink>
+              )}
+
+              {/* Management: admin/direction ou superviseur Canal */}
               {(isAdmin() || isDirection() || isCanalSupervisor()) && (
-                <>
-                  {activeMission === "Leads" && (
-                    <NavLink
-                      to="/dashboard/leads-sales"
-                      className={({ isActive }) =>
-                        `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                          isActive
-                            ? "bg-cactus-700/70 text-white"
-                            : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                        }`
-                      }
-                    >
-                      <DollarSign className="w-5 h-5 mr-3" />
-                      Ventes Leads
-                    </NavLink>
-                  )}
+                <NavLink
+                  to="/dashboard/management"
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive
+                        ? "bg-cactus-700/70 text-white"
+                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <Briefcase className="w-5 h-5 mr-3" />
+                  Management
+                </NavLink>
+              )}
 
-                  {activeMission === "CANAL+" && (
-                    <NavLink
-                      to="/dashboard/sales"
-                      className={({ isActive }) =>
-                        `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                          isActive
-                            ? "bg-cactus-700/70 text-white"
-                            : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                        }`
-                      }
-                    >
-                      <DollarSign className="w-5 h-5 mr-3" />
-                      Ventes Canal+
-                    </NavLink>
-                  )}
-
-                  <NavLink
-                    to="/dashboard/management"
-                    className={({ isActive }) =>
-                      `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        isActive
-                          ? "bg-cactus-700/70 text-white"
-                          : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                      }`
-                    }
+              {/* Import CSV: seulement admin/direction */}
+              {(isAdmin() || isDirection()) && (
+                <NavLink
+                  to="/dashboard/import-csv"
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive
+                        ? "bg-cactus-700/70 text-white"
+                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-5 h-5 mr-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
                   >
-                    <Briefcase className="w-5 h-5 mr-3" />
-                    Management
-                  </NavLink>
-
-                  <NavLink
-                    to="/dashboard/import-csv"
-                    className={({ isActive }) =>
-                      `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        isActive
-                          ? "bg-cactus-700/70 text-white"
-                          : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                      }`
-                    }
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="w-5 h-5 mr-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Import CSV
-                  </NavLink>
-                </>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Import CSV
+                </NavLink>
               )}
             </div>
           </Section>
         )}
 
-        {/* Section 3 : Administration (admin only, plus certains superviseurs Canal) */}
+        {/* Section 3 : Administration (admin + superviseur Canal pour Checklist) */}
         {(shouldShowAdminSection() || isCanalSupervisor()) && (
           <Section
             title="Administration"
@@ -295,47 +304,53 @@ const Sidebar: React.FC = () => {
             setOpen={setOpenAdministration}
           >
             <div className="flex flex-col py-1">
-              <NavLink
-                to="/dashboard/admin-users"
-                className={({ isActive }) =>
-                  `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    isActive
-                      ? "bg-cactus-700/70 text-white"
-                      : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                  }`
-                }
-              >
-                <span className="mr-3" role="img" aria-label="utilisateur">👤</span>
-                Gestion Utilisateurs
-              </NavLink>
+              {isAdmin() && (
+                <NavLink
+                  to="/dashboard/admin-users"
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive
+                        ? "bg-cactus-700/70 text-white"
+                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <span className="mr-3" role="img" aria-label="utilisateur">👤</span>
+                  Gestion Utilisateurs
+                </NavLink>
+              )}
 
-              <NavLink
-                to="/dashboard/gestion-missions"
-                className={({ isActive }) =>
-                  `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    isActive
-                      ? "bg-cactus-700/70 text-white"
-                      : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                  }`
-                }
-              >
-                <span className="mr-3" role="img" aria-label="mission">🗂️</span>
-                Gestion Missions
-              </NavLink>
+              {isAdmin() && (
+                <NavLink
+                  to="/dashboard/gestion-missions"
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive
+                        ? "bg-cactus-700/70 text-white"
+                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <span className="mr-3" role="img" aria-label="mission">🗂️</span>
+                  Gestion Missions
+                </NavLink>
+              )}
 
-              <NavLink
-                to="/dashboard/checklist-admin"
-                className={({ isActive }) =>
-                  `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    isActive
-                      ? "bg-cactus-700/70 text-white"
-                      : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
-                  }`
-                }
-              >
-                <span className="mr-3" role="img" aria-label="heures">⏱️</span>
-                Checklist Heures (Admin)
-              </NavLink>
+              {(isAdmin() || isCanalSupervisor()) && (
+                <NavLink
+                  to="/dashboard/checklist-admin"
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive
+                        ? "bg-cactus-700/70 text-white"
+                        : "text-cactus-100 hover:bg-cactus-700/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <span className="mr-3" role="img" aria-label="heures">⏱️</span>
+                  Checklist Heures (Admin)
+                </NavLink>
+              )}
             </div>
           </Section>
         )}

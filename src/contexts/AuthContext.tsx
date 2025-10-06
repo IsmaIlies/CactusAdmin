@@ -18,7 +18,7 @@ import {
   updatePassword,
   verifyBeforeUpdateEmail,
 } from "firebase/auth";
-import { doc, setDoc, getFirestore } from "firebase/firestore";
+import { doc, setDoc, getFirestore, getDoc } from "firebase/firestore";
 
 interface User {
   id: string;
@@ -89,29 +89,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // Récupérer les custom claims depuis le token ID
-          const idTokenResult = await firebaseUser.getIdTokenResult();
-          const customClaims = idTokenResult.claims as any;
-
-          setUser({
-            id: firebaseUser.uid,
-            displayName: firebaseUser.displayName || "",
-            email: firebaseUser.email || "",
-            emailVerified: firebaseUser.emailVerified,
-            role: (customClaims.role as string) || undefined,
-            assignedMissions: (customClaims.missions as string[]) || [],
-            missions: (customClaims.missions as { name: string; role: string }[]) || [],
-            customClaims: {
-              admin: (customClaims.admin as boolean) || false,
-              direction: (customClaims.direction as boolean) || false,
-              superviseur: (customClaims.superviseur as boolean) || false,
-              ta: (customClaims.ta as boolean) || false,
-              missions: (customClaims.missions as string[]) || [],
-            },
-          });
+          const built = await buildUserFromAuth(firebaseUser);
+          setUser(built);
         } catch (error) {
-          console.error("Erreur lors de la récupération des claims:", error);
-          // En cas d'erreur, créer un utilisateur sans rôles spéciaux
+          console.error("Erreur lors de la construction de l'utilisateur:", error);
           setUser({
             id: firebaseUser.uid,
             displayName: firebaseUser.displayName || "",
@@ -143,32 +124,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       const user = userCredential.user;
 
       try {
-        // Récupérer les custom claims
-        const idTokenResult = await user.getIdTokenResult();
-        const customClaims = idTokenResult.claims as any;
-
-        setUser({
-          id: user.uid,
-          displayName: user.displayName || "",
-          email: user.email || "",
-          emailVerified: user.emailVerified,
-          role: (customClaims.role as string) || undefined,
-          assignedMissions: (customClaims.missions as string[]) || [],
-          missions: (customClaims.missions as { name: string; role: string }[]) || [],
-          customClaims: {
-            admin: (customClaims.admin as boolean) || false,
-            direction: (customClaims.direction as boolean) || false,
-            superviseur: (customClaims.superviseur as boolean) || false,
-            ta: (customClaims.ta as boolean) || false,
-            missions: (customClaims.missions as string[]) || [],
-          },
-        });
+        const built = await buildUserFromAuth(user as any);
+        setUser(built);
       } catch (claimsError) {
-        console.error(
-          "Erreur lors de la récupération des claims:",
-          claimsError
-        );
-        // En cas d'erreur, créer un utilisateur sans rôles spéciaux
+        console.error("Erreur lors de la récupération/assemblage des claims:", claimsError);
         setUser({
           id: user.uid,
           displayName: user.displayName || "",
@@ -329,27 +288,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         auth.currentUser.emailVerified
       );
 
-      // Récupérer les custom claims mis à jour
-      const idTokenResult = await auth.currentUser.getIdTokenResult(true); // Force refresh
-      const customClaims = idTokenResult.claims as any;
-
-      // Forcer la mise à jour du contexte avec les claims
-      setUser({
-        id: auth.currentUser.uid,
-        displayName: auth.currentUser.displayName || "",
-        email: auth.currentUser.email || "",
-        emailVerified: auth.currentUser.emailVerified,
-        role: (customClaims.role as string) || undefined,
-        assignedMissions: (customClaims.missions as string[]) || [],
-        missions: (customClaims.missions as { name: string; role: string }[]) || [],
-        customClaims: {
-          admin: (customClaims.admin as boolean) || false,
-          direction: (customClaims.direction as boolean) || false,
-          superviseur: (customClaims.superviseur as boolean) || false,
-          ta: (customClaims.ta as boolean) || false,
-          missions: (customClaims.missions as string[]) || [],
-        },
-      });
+      // Reconstruire l'utilisateur à partir des claims + Firestore
+      const built = await buildUserFromAuth(auth.currentUser as any, true);
+      setUser(built);
     } catch (error) {
       console.error("Erreur lors du rechargement de l'utilisateur:", error);
     }
@@ -408,9 +349,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const isSuperviseur = (): boolean => {
-    return (
-      user?.customClaims?.superviseur === true || user?.role === "superviseur"
-    );
+    // Accepte les deux variantes: 'superviseur' (fr) et 'supervisor' (en)
+    const claimSup = (user?.customClaims as any)?.superviseur === true || (user?.customClaims as any)?.supervisor === true;
+    const roleSup = user?.role === "superviseur" || user?.role === "supervisor";
+    return claimSup || roleSup;
   };
 
   const isTA = (): boolean => {
@@ -438,10 +380,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
     // Superviseurs et TAs ont accès seulement aux missions assignées
     if (isSuperviseur() || isTA()) {
-      return (
-        user?.assignedMissions?.includes(missionId) === true ||
-        user?.customClaims?.missions?.includes(missionId) === true
-      );
+      const assigned = Array.isArray(user?.assignedMissions) ? user!.assignedMissions! : [];
+      const claimMissions = Array.isArray(user?.customClaims?.missions) ? (user!.customClaims!.missions as string[]) : [];
+      if (assigned.includes(missionId) || claimMissions.includes(missionId)) return true;
+
+      // Si missionId est un nom (pas un ID), essayer de matcher sur user.missions[].name
+      const missionsField = Array.isArray((user as any)?.missions) ? (user as any).missions : [];
+      if (missionsField.some((m: any) => (m?.name || "").toString().toLowerCase() === missionId.toLowerCase())) return true;
+
+      return false;
     }
 
     return false;
@@ -473,27 +420,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       // Forcer le rechargement du token pour récupérer les nouveaux custom claims
       await auth.currentUser.getIdToken(true); // true = force refresh
 
-      // Récupérer les nouveaux custom claims
-      const idTokenResult = await auth.currentUser.getIdTokenResult();
-      const customClaims = idTokenResult.claims as any;
-
-      // Mettre à jour l'état utilisateur avec les nouveaux claims
-      setUser({
-        id: auth.currentUser.uid,
-        displayName: auth.currentUser.displayName || "",
-        email: auth.currentUser.email || "",
-        emailVerified: auth.currentUser.emailVerified,
-        role: (customClaims.role as string) || undefined,
-        assignedMissions: (customClaims.missions as string[]) || [],
-        missions: (customClaims.missions as { name: string; role: string }[]) || [],
-        customClaims: {
-          admin: (customClaims.admin as boolean) || false,
-          direction: (customClaims.direction as boolean) || false,
-          superviseur: (customClaims.superviseur as boolean) || false,
-          ta: (customClaims.ta as boolean) || false,
-          missions: (customClaims.missions as string[]) || [],
-        },
-      });
+      // Reconstruire l'utilisateur avec fusion Firestore
+      const built = await buildUserFromAuth(auth.currentUser as any);
+      setUser(built);
 
       console.log("Custom claims rafraîchis avec succès");
     } catch (error) {
@@ -531,3 +460,54 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
+// Construit l'objet User à partir des claims et du document Firestore /users/{uid}
+async function buildUserFromAuth(firebaseUser: any, forceRefreshToken: boolean = false): Promise<User> {
+  try {
+    if (forceRefreshToken) {
+      await firebaseUser.getIdToken(true);
+    }
+    const idTokenResult = await firebaseUser.getIdTokenResult();
+    const customClaims = idTokenResult.claims as any;
+
+    const db = getFirestore();
+    const userDocRef = doc(db, "users", firebaseUser.uid);
+    const snap = await getDoc(userDocRef);
+    const data = snap.exists() ? (snap.data() as any) : {};
+
+    // Fusionner role et missions: claims en priorité, fallback Firestore
+  const rawRole: string | undefined = (customClaims.role as string) || data.role;
+  const role: string | undefined = rawRole ? rawRole.toString().toLowerCase() : undefined;
+    const assignedMissions: string[] = Array.isArray(customClaims.missions)
+      ? (customClaims.missions as string[])
+      : Array.isArray(data.assignedMissions)
+      ? data.assignedMissions
+      : [];
+    const missions = Array.isArray(data.missions) ? data.missions : [];
+
+    return {
+      id: firebaseUser.uid,
+      displayName: firebaseUser.displayName || "",
+      email: firebaseUser.email || "",
+      emailVerified: firebaseUser.emailVerified,
+      role,
+      assignedMissions,
+      missions,
+      customClaims: {
+        admin: (customClaims.admin as boolean) || false,
+        direction: (customClaims.direction as boolean) || false,
+        superviseur: (customClaims.superviseur as boolean) || false,
+        ta: (customClaims.ta as boolean) || false,
+        missions: Array.isArray(customClaims.missions) ? (customClaims.missions as string[]) : [],
+      },
+    };
+  } catch (e) {
+    console.error("buildUserFromAuth error:", e);
+    return {
+      id: firebaseUser.uid,
+      displayName: firebaseUser.displayName || "",
+      email: firebaseUser.email || "",
+      emailVerified: firebaseUser.emailVerified,
+    } as User;
+  }
+}
