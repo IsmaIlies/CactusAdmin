@@ -252,6 +252,16 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
+      <button
+        type="button"
+        onClick={() => navigate("/login/admin")}
+        className="group relative mt-8 inline-flex items-center gap-3 overflow-hidden rounded-full border border-white/15 bg-black/85 px-7 py-3 text-sm font-semibold uppercase tracking-[0.35em] text-white shadow-[0_24px_60px_rgba(0,0,0,0.55)] transition-all duration-300 hover:scale-105 hover:border-white/35 hover:bg-black focus:outline-none focus:ring-2 focus:ring-white/40"
+      >
+        <span className="pointer-events-none absolute inset-0 -translate-y-full bg-gradient-to-br from-white/45 via-white/10 to-transparent opacity-0 transition-all duration-500 ease-out group-hover:translate-y-0 group-hover:opacity-100" />
+        ADMIN
+        <span className="h-px w-8 bg-white/40" aria-hidden="true" />
+        <span className="text-[10px] tracking-[0.2em] text-white/60 normal-case">Accès sécurisé</span>
+      </button>
     </div>
   );
 };

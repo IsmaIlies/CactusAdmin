@@ -1,5 +1,8 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminControlCenterPage from "./pages/AdminControlCenterPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import AuthActionPage from "./pages/AuthActionPage";
@@ -34,6 +37,14 @@ function App() {
             element={
               <PublicRoute>
                 <LoginPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/login/admin"
+            element={
+              <PublicRoute>
+                <AdminLoginPage />
               </PublicRoute>
             }
           />
@@ -99,6 +110,22 @@ function App() {
             <Route path="sales" element={<AdminLeadsSalesPage />} />
             <Route path="checklist" element={<AdminLeadsChecklistPage />} />
           </Route>
+          <Route
+            path="/admin/control"
+            element={
+              <AdminProtection requiredRole="admin">
+                <AdminControlCenterPage />
+              </AdminProtection>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <AdminProtection requiredRole="admin">
+                <AdminUsersPage />
+              </AdminProtection>
+            }
+          />
           <Route
             path="/admin/canal/*"
             element={

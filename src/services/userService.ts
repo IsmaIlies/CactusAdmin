@@ -18,6 +18,9 @@ export interface UserUpdateData {
   displayName?: string;
   firstName?: string;
   lastName?: string;
+  password?: string;
+  email?: string;
+  operation?: string;
 }
 
 export interface UserRole {
@@ -47,6 +50,7 @@ class UserService {
     "sendEmailVerification"
   );
   private updateUserFunction = httpsCallable(this.functions, "updateUser");
+  private forceLogoutFunction = httpsCallable(this.functions, "forceLogoutUser");
 
   /**
    * Récupère la liste de tous les utilisateurs
@@ -131,6 +135,21 @@ class UserService {
       console.error("Erreur suppression utilisateur:", error);
       throw new Error(
         `Erreur: ${error.message || error.code || "Erreur inconnue"}`
+      );
+    }
+  }
+
+  async forceLogout(userId: string): Promise<string> {
+    try {
+      const result = await this.forceLogoutFunction({ userId });
+      const data = result.data as { success: boolean; message?: string };
+      if (data.success) {
+        return data.message || "Déconnexion forcée avec succès";
+      }
+      throw new Error("Échec de la déconnexion forcée");
+    } catch (error: any) {
+      throw new Error(
+        `Erreur: ${error?.message || error?.code || "Déconnexion forcée impossible"}`
       );
     }
   }

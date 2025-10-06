@@ -123,6 +123,31 @@ exports.listUsers = onCall({ region: "europe-west9" }, async (request) => {
   }
 });
 
+exports.forceLogoutUser = onCall({ region: "europe-west9" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Utilisateur non authentifié");
+  }
+
+  const requester = await admin.auth().getUser(request.auth.uid);
+  const isAdmin = requester.customClaims && requester.customClaims.admin;
+  if (!isAdmin) {
+    throw new HttpsError("permission-denied", "Seuls les administrateurs peuvent forcer une déconnexion");
+  }
+
+  const targetUserId = request.data && request.data.userId;
+  if (!targetUserId || typeof targetUserId !== "string") {
+    throw new HttpsError("invalid-argument", "Identifiant utilisateur requis");
+  }
+
+  try {
+    await admin.auth().revokeRefreshTokens(targetUserId);
+    return { success: true };
+  } catch (error) {
+    console.error("Erreur forceLogoutUser", error);
+    throw new HttpsError("internal", error.message || "Impossible de forcer la déconnexion");
+  }
+});
+
 // Soumission d'heures depuis le site Agent (autre app)
 // Usage côté client (autre site) via Firebase Functions SDK:
 //   const submit = httpsCallable(functions, 'submitAgentHours');
@@ -218,16 +243,25 @@ exports.setUserRole = onCall({ region: "europe-west9" }, async (request) => {
   }
 
   try {
-    // Préparer les custom claims selon le rôle
-    const customClaims = { role };
+    const targetRecord = await admin.auth().getUser(targetUserId);
+    const existingClaims = targetRecord.customClaims || {};
+    const roleClaimsToClear = ["admin", "direction", "superviseur", "ta"];
 
-    // Ajouter le claim spécifique au rôle
+    const newClaims = { ...existingClaims };
+
+    delete newClaims.role;
+    roleClaimsToClear.forEach((key) => {
+      if (newClaims[key]) {
+        delete newClaims[key];
+      }
+    });
+
     if (role !== "user") {
-      customClaims[role] = true;
+      newClaims.role = role;
+      newClaims[role] = true;
     }
 
-    // Définir les custom claims
-    await admin.auth().setCustomUserClaims(targetUserId, customClaims);
+    await admin.auth().setCustomUserClaims(targetUserId, newClaims);
 
     return {
       success: true,
@@ -1112,6 +1146,8 @@ exports.updateUser = onCall({ region: "europe-west9" }, async (request) => {
   }
 
   try {
+    const targetRecord = await admin.auth().getUser(targetUserId);
+
     // Préparer les données de mise à jour pour Firebase Auth
     const updateFields = {};
 
@@ -1119,26 +1155,58 @@ exports.updateUser = onCall({ region: "europe-west9" }, async (request) => {
       updateFields.displayName = updateData.displayName;
     }
 
-    // Mettre à jour l'utilisateur dans Firebase Auth
-    await admin.auth().updateUser(targetUserId, updateFields);
+    if (updateData.email !== undefined) {
+      updateFields.email = updateData.email;
+    }
+
+    if (updateData.password !== undefined) {
+      if (typeof updateData.password !== "string" || updateData.password.length < 8) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Le mot de passe doit contenir au moins 8 caractères"
+        );
+      }
+      updateFields.password = updateData.password;
+    }
+
+    if (Object.keys(updateFields).length > 0) {
+      await admin.auth().updateUser(targetUserId, updateFields);
+    }
 
     // Optionnel : Sauvegarder les informations supplémentaires dans Firestore
     if (
       updateData.firstName !== undefined ||
-      updateData.lastName !== undefined
+      updateData.lastName !== undefined ||
+      updateData.operation !== undefined
     ) {
       const db = admin.firestore();
-      await db
-        .collection("users")
-        .doc(targetUserId)
-        .set(
-          {
-            firstName: updateData.firstName || "",
-            lastName: updateData.lastName || "",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        );
+      const extraData = {
+        ...(updateData.firstName !== undefined
+          ? { firstName: updateData.firstName }
+          : {}),
+        ...(updateData.lastName !== undefined
+          ? { lastName: updateData.lastName }
+          : {}),
+        ...(updateData.operation !== undefined
+          ? { operation: updateData.operation }
+          : {}),
+      };
+
+      if (Object.keys(extraData).length > 0) {
+        extraData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+        await db
+          .collection("users")
+          .doc(targetUserId)
+          .set(extraData, { merge: true });
+      }
+    }
+
+    if (updateData.operation !== undefined) {
+      const newClaims = {
+        ...(targetRecord.customClaims || {}),
+        operation: updateData.operation,
+      };
+      await admin.auth().setCustomUserClaims(targetUserId, newClaims);
     }
 
     return {
